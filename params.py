@@ -49,7 +49,7 @@ IMPROVED_SIM = True
 BUSINESS_CLASS_SERVER_INDEX             = [0]
 PREMIUM_ECONOMY_CLASS_SERVER_INDEX      = [1]
 ECONOMY_CLASS_MULTI_SERVER_INDEX        = [2, 3, 4]
-FLEXI_PLUSS_SERVER_INDEX                = [5]
+FLEXI_PLUS_SERVER_INDEX                 = [5]
 SELF_BD_MULTI_SERVER_INDEX              = [6, 7]
 BD_MULTI_SERVER_INDEX                   = [8, 9, 10, 11]
 
@@ -69,16 +69,17 @@ SICUREZZA_NORMALE_SERVER_INDEX          = [19, 20, 21, 22, 23, 24]
 
 
 # -------------------- Indici delle code Check-In --------------------
-BUSINESS_CLASS_SERVER_INDEX             = [0]
-PREMIUM_ECONOMY_CLASS_SERVER_INDEX      = [1]
-ECONOMY_CLASS_MULTI_SERVER_INDEX        = [2, 3, 4]
-FLEXI_PLUSS_SERVER_INDEX                = [5]
-SELF_BD_MULTI_SERVER_INDEX              = [6, 7]
-BD_MULTI_SERVER_INDEX                   = [8, 9, 10, 11]
+BUSINESS_CLASS_QUEUE             = [0]
+PREMIUM_ECONOMY_CLASS_QUEUE      = [1]
+ECONOMY_CLASS_MULTI_QUEUE        = [2]
 
-# -------------------- Indici dei serventi Fast-Track --------------------
-TORNELLO_FAST_TRACK_SERVER_INDEX        = [12]
-SICUREZZA_FAST_TRACK_SERVER_INDEX       = [13, 14]
+FLEXI_PLUS_SERVER_QUEUE          = [3]
+SELF_BD_MULTI_SERVER_QUEUE       = [4]
+BD_MULTI_SERVER_QUEUE            = [5]
+
+# -------------------- Indici dei code Fast-Track --------------------
+TORNELLO_FAST_TRACK_QUEUE        = [6]
+SICUREZZA_FAST_TRACK_QUEUE       = [7]
 
 # -------------------- Indici dei serventi Normali --------------------
 TORNELLO_NORMALE_1_SERVER_INDEX         = [15]
