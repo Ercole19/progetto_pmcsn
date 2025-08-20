@@ -1,6 +1,6 @@
 ##from Simulation import start_simulation
 import os
-from params import * #parametri del modello
+from params import *
 from rng.rng import *
 from simulation import *
 
@@ -33,15 +33,15 @@ def finite_horizon_run():
         with open(os.path.join(directory, file), 'w') as f:
             f.write('')
 
-    plantSeeds(SEED)
+    plant_seeds(SEED)
     # Esecuzione delle repliche
     for ri in range(REPLICATION_NUM):
         print("Starting replica for finite-horizon simulation, seed: ", get_seed())
         # plantSeeds(getSeed())
         start_simulation(end_simulation_time, "finite", SAMPLING_RATE)
-        selectStream(0)
-        seed_used.append(getSeed())
-        print(f"Simulation {ri + 1}/{REPLICATION_NUM} ending seed: {getSeed()}")
+        select_stream(0)
+        seed_used.append(get_seed())
+        print(f"Simulation {ri + 1}/{REPLICATION_NUM} ending seed: {get_seed()}")
     print("fine simulazione")
     for s in seed_used:
         print(s)

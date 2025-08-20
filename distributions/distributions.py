@@ -4,22 +4,22 @@
 #
 #     Generator         Range (x)     Mean         Variance
 #
-#     Bernoulli(p)      x = 0,1       p            p*(1-p)
-#     Binomial(n, p)    x = 0,...,n   n*p          n*p*(1-p)
-#     Equilikely(a, b)  x = a,...,b   (a+b)/2      ((b-a+1)*(b-a+1)-1)/12
-#     Geometric(p)      x = 0,...     p/(1-p)      p/((1-p)*(1-p))
-#     Pascal(n, p)      x = 0,...     n*p/(1-p)    n*p/((1-p)*(1-p))
-#     Poisson(m)        x = 0,...     m            m
+#     bernoulli(p)      x = 0,1       p            p*(1-p)
+#     binomial(n, p)    x = 0,...,n   n*p          n*p*(1-p)
+#     equilikely(a, b)  x = a,...,b   (a+b)/2      ((b-a+1)*(b-a+1)-1)/12
+#     geometric(p)      x = 0,...     p/(1-p)      p/((1-p)*(1-p))
+#     pascal(n, p)      x = 0,...     n*p/(1-p)    n*p/((1-p)*(1-p))
+#     poisson(m)        x = 0,...     m            m
 #
 # and seven continuous distributions
 #
-#     Uniform(a, b)     a < x < b     (a + b)/2    (b - a)*(b - a)/12
-#     Exponential(m)    x > 0         m            m*m
-#     Erlang(n, b)      x > 0         n*b          n*b*b
-#     Normal(m, s)      all x         m            s*s
-#     Lognormal(a, b)   x > 0            see below
-#     Chisquare(n)      x > 0         n            2*n
-#     Student(n)        all x         0  (n > 1)   n/(n - 2)   (n > 2)
+#     uniform(a, b)     a < x < b     (a + b)/2    (b - a)*(b - a)/12
+#     exponential(m)    x > 0         m            m*m
+#     erlang(n, b)      x > 0         n*b          n*b*b
+#     normal(m, s)      all x         m            s*s
+#     lognormal(a, b)   x > 0            see below
+#     chisquare(n)      x > 0         n            2*n
+#     student(n)        all x         0  (n > 1)   n/(n - 2)   (n > 2)
 #
 # For the a Lognormal(a, b) random variable, the mean and variance are
 #
@@ -40,19 +40,19 @@ from rng.rng import random
 from math import log, sqrt, exp
 
 
-def Bernoulli(p):
+def bernoulli(p):
     # ========================================================
     # Returns 1 with probability p or 0 with probability 1 - p.
     # NOTE: use 0.0 < p < 1.0
     # ========================================================
 
-    if (random() < 1 - p):
-        return (0)
+    if random() < 1 - p:
+        return 0
     else:
-        return (1)
+        return 1
 
 
-def Binomial(n, p):
+def binomial(n, p):
     # ================================================================
     # Returns a binomial distributed integer between 0 and n inclusive.
     # NOTE: use n > 0 and 0.0 < p < 1.0
@@ -61,8 +61,8 @@ def Binomial(n, p):
     x = 0
 
     for i in range(0, n):
-        x += Bernoulli(p)
-    return (x)
+        x += bernoulli(p)
+    return x
 
 
 def equilikely(a, b):
@@ -70,7 +70,7 @@ def equilikely(a, b):
     # Returns an equilikely distributed integer between a and b inclusive.
     # NOTE: use a < b
     # ===================================================================
-    return (a + int((b - a + 1) * random()))
+    return a + int((b - a + 1) * random())
 
 
 def geometric(p):
@@ -80,7 +80,7 @@ def geometric(p):
     # ====================================================
     #
 
-    return (int(log(1.0 - random()) / log(p)))
+    return int(log(1.0 - random()) / log(p))
 
 
 def pascal(n, p):
@@ -93,8 +93,8 @@ def pascal(n, p):
     x = 0
 
     for i in range(0, n):
-        x += Geometric(p)
-    return (x)
+        x += geometric(p)
+    return x
 
 
 def poisson(m):
@@ -106,11 +106,11 @@ def poisson(m):
     t = 0.0
     x = 0
 
-    while (t < m):
-        t += Exponential(1.0)
+    while t < m:
+        t += exponential(1.0)
         x += 1
 
-    return (x - 1)
+    return x - 1
 
 
 def uniform(a, b):
@@ -119,7 +119,7 @@ def uniform(a, b):
     # NOTE: use a < b
     # ===========================================================
     #
-    return (a + (b - a) * random())
+    return a + (b - a) * random()
 
 
 def exponential(m):
@@ -128,7 +128,7 @@ def exponential(m):
     # NOTE: use m > 0.0
     # =========================================================
     #
-    return (-m * log(1.0 - random()))
+    return -m * log(1.0 - random())
 
 
 def erlang(n, b):
@@ -140,8 +140,8 @@ def erlang(n, b):
     x = 0.0
 
     for i in range(0, n):
-        x += Exponential(b)
-    return (x)
+        x += exponential(b)
+    return x
 
 
 def normal(m, s):
@@ -165,7 +165,7 @@ def normal(m, s):
     q4 = 0.385607006340e-2
 
     u = random()
-    if (u < 0.5):
+    if u < 0.5:
         t = sqrt(-2.0 * log(u))
     else:
         t = sqrt(-2.0 * log(1.0 - u))
@@ -173,12 +173,12 @@ def normal(m, s):
     p = p0 + t * (p1 + t * (p2 + t * (p3 + t * p4)))
     q = q0 + t * (q1 + t * (q2 + t * (q3 + t * q4)))
 
-    if (u < 0.5):
+    if u < 0.5:
         z = (p / q) - t
     else:
         z = t - (p / q)
 
-    return (m + s * z)
+    return m + s * z
 
 
 def lognormal(a, b):
@@ -187,10 +187,10 @@ def lognormal(a, b):
     # NOTE: use b > 0.0
     # ====================================================
     #
-    return (exp(a + b * Normal(0.0, 1.0)))
+    return exp(a + b * normal(0.0, 1.0))
 
 
-def Chisquare(n):
+def chisquare(n):
     # =====================================================
     # Returns a chi-square distributed positive real number.
     # NOTE: use n > 0
@@ -202,7 +202,7 @@ def Chisquare(n):
         z = normal(0.0, 1.0)
         x += z * z
 
-    return (x)
+    return x
 
 
 def student(n):
@@ -211,7 +211,7 @@ def student(n):
     # NOTE: use n > 0
     # ===========================================
     #
-    return (Normal(0.0, 1.0) / sqrt(Chisquare(n) / n))
+    return normal(0.0, 1.0) / sqrt(chisquare(n) / n)
 
 
 def test_functions():
@@ -222,22 +222,22 @@ def test_functions():
     for i in range(0, 10):
         bern.append(bernoulli(.65))
 
-    if (bern == [0, 0, 1, 0, 1, 0, 1, 1, 1, 1]):
+    if bern == [0, 0, 1, 0, 1, 0, 1, 1, 1, 1]:
         print("Bernoulli test passed")
     else:
         print("FIX BERNOULLI!")
 
     # binomial
-    bino = Binomial(50, .19)
-    if (bino == 7):
+    bino = binomial(50, .19)
+    if bino == 7:
         print("Binomial test passed")
     else:
         print("FIX BINOMIAL")
         print(bino)
 
     # equilikely
-    equi = Equilikely(32, 108)
-    if (equi == 77):
+    equi = equilikely(32, 108)
+    if equi == 77:
         print("Equilikely test passed")
     else:
         print("FIX EQUILIKELY")
@@ -245,79 +245,79 @@ def test_functions():
     # geo test
     geo = []
     for i in range(0, 10):
-        geo.append(Geometric(.93))
+        geo.append(geometric(.93))
 
-    if (geo == [0, 8, 4, 21, 7, 3, 17, 5, 14, 1]):
+    if geo == [0, 8, 4, 21, 7, 3, 17, 5, 14, 1]:
         print("Geo test passed")
     else:
         print("Fix geo!")
         print(geo)
 
     # pascal test
-    pas = Pascal(87, .93)
-    if (pas == 1407):
+    pas = pascal(87, .93)
+    if pas == 1407:
         print("Pascal test passed!")
     else:
         print("FIX PASCAL")
 
     # poisson test
-    pois = Poisson(13.3)
-    if (pois == 15):
+    pois = poisson(13.3)
+    if pois == 15:
         print("Poisson test passed!")
     else:
         print("FIX POISSON!")
 
     # uniform test
-    uni = Uniform(32, 108)
-    if (round(uni, 6) == 78.976127):
+    uni = uniform(32, 108)
+    if round(uni, 6) == 78.976127:
         print("Uniform test passed!")
     else:
         print("FIX UNIFORM. Produced: ", uni)
         print("Expected: 78.976127")
 
     # exp test
-    exp = Exponential(4.7)
-    if (round(exp, 6) == 4.796404):
+    expo = exponential(4.7)
+    if round(expo, 6) == 4.796404:
         print("Exponential test passed!")
     else:
         print("FIX EXP. Produced: ", expo)
         print("expected: 4.796404")
 
     # erlang test
-    erl = Erlang(41, .08)
-    if (round(erl, 6) == 2.824873):
+    erl = erlang(41, .08)
+    if round(erl, 6) == 2.824873:
         print("Erland test passed!")
     else:
         print("FIX ERLANG Produced: ", erl)
         print("Expected: 2.824873")
 
     # normal test
-    norm = Normal(8.9, 4)
-    if (round(norm, 6) == 8.374243):
+    norm = normal(8.9, 4)
+    if round(norm, 6) == 8.374243:
         print("Normal test passed!")
     else:
         print("FIX NORMAL Produced: ", norm)
         print("Expected: 8.374243")
 
     # lognormal test
-    lnorm = Lognormal(1.31, 1.6)
-    if (round(lnorm, 6) == 5.533064):
+    lnorm = lognormal(1.31, 1.6)
+    if round(lnorm, 6) == 5.533064:
         print("Lognormal test passed!")
     else:
         print("FIX LOGNORMAL Produced: ", lnorm)
         print("Expected: 5.533064")
 
     # chisq test
-    chisq = Chisquare(39)
-    if (round(chisq, 6) == 33.634524):
+    chisq = chisquare(39)
+    if round(chisq, 6) == 33.634524:
         print("Chisquare test passed!")
     else:
         print("FIX CHI-SQUARE - Produced: ", chisq)
         print("Expected: 33.634524")
 
     # t test
-    stu = Student(61)
-    if (round(stu, 6) == -1.429058):
+    stu = student(61)
+    if round(stu, 6) == -1.429058:
         print("Student test passed!")
     else:
         print("FIX STUDENT - Produced: ", stu)

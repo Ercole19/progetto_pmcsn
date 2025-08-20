@@ -1,20 +1,20 @@
 #  Check-In Tradizionale
-# La coda # 1 è per i passeggeri di classe Business
-# La coda # 2 è per i passeggeri di classe Premium-Economy
-# La coda # 3 è per i passeggeri di classe Economy
+# La coda # 0 è per i passeggeri di classe Business
+# La coda # 1 è per i passeggeri di classe Premium-Economy
+# La coda # 2 è per i passeggeri di classe Economy
 
 #  Check-In Tradizionale
-# La coda # 4 per i passeggeri che scelgono l'opzione Flexi-Plus
-# La coda # 5 per i passeggeri che scelgono l'opzione Self Bag & Drop
-# La coda # 6 per i passeggeri che scelgono l'opzione Bag & Drop
+# La coda # 3 per i passeggeri che scelgono l'opzione Flexi-Plus
+# La coda # 4 per i passeggeri che scelgono l'opzione Self Bag & Drop
+# La coda # 5 per i passeggeri che scelgono l'opzione Bag & Drop
 
 #  Fast - Track
-# La coda # 7 è per il Tornello
-# La coda # 8 è per la coda per i controlli di sicurezza della zona Fast - Track
+# La coda # 6 è per il Tornello
+# La coda # 7 è per la coda per i controlli di sicurezza della zona Fast - Track
 
 #  Normale
-# Le code # 9 - 10 - 11 - 12 sono per il Tornello
-# La coda # 13 è per la coda per i controlli di sicurezza della zona Normale
+# Le code # 8 - 9 - 10 - 11 sono per il Tornello
+# La coda # 12 è per la coda per i controlli di sicurezza della zona Normale
 
 # ---------------------------------------------- #
 
@@ -41,7 +41,6 @@
 
 # -------------------- PARAMETRI DI CONFIGURAZIONE --------------------
 VERBOSE = False
-
 #  -------------------- PARAMETRI DI SIMULAZIONE (dipendenti da parametri di configurazione) --------------------
 
 # -------------------- Indici dei serventi Check-In --------------------
@@ -118,32 +117,80 @@ QUEUES_NUM_AREA_NORMALE     = (len(TORNELLO_NORMALE_1_QUEUE)            +
                               len(TORNELLO_NORMALE_4_QUEUE)             +
                               len(SICUREZZA_NORMALE_QUEUE)              )
 
+# -------------------- Probabilità --------------------
+
+P_T = 0.20              # Probabilità che un passeggero scelga una compagnia Tradizionale
+P_L = 0.80              # Probabilità che un passeggero scelga una compagnia Low-Cost
+
+P_T_B = 0.1             # Probabilità che un passeggero scelga la tariffa Business-Class
+P_T_PE = 0.20           # Probabilità che un passeggero scelga la tariffa Premium-Economy
+P_T_E = 0.45            # Probabilità che un passeggero scelga la tariffa Economy
+P_T_OB = 0.25           # Probabilità che un passeggero abbia effettuato check-in online e non abbia il bagaglio da stiva
+
+P_L_OB = 0.70           # Probabilità che un passeggero non abbia il bagaglio da stiva
+P_L_NOB = 1 - P_L_OB    # Probabilità che un passeggero richieda servizi aggiuntivi
+
+P_L_FP = 0.05           # Probabilità che un passeggero abbia scelto il servizio Flexi-Plus
+P_L_SB_e_D = 0.10       # Probabilità che un passeggero esegue autonomamente l'imbarco del bagaglio da stiva
+P_L_B_e_D = 0.85        # Probabilità che un passeggero non esegue autonomamente l'imbarco del bagaglio da stiva
+
+P_FT = 0.20             # Probabilità che un passeggero decida di acquistare il servizio Fast-Track
+P_N = 1 - P_FT          # Probabilità che un passeggero non acquisti il servizio Fast-Track
 
 # -------------------- Tempi di Arrivo --------------------
 
-LAMBDA_G = 1 / 1.5     # Tempo di inter-arrivo medio 1.5 minuti (misurazione di 50 persone in 40 minuti -> 1 persona ogni 0.8 minuti)
-LAMBDA_ON = 1 / 10     # Tempo di inter-arrivo medio 10 minuti prenotazioni Online
+GAMMA = 0.3417                  # Tasso medio complessivo degli arrivi
 
-# CALCOLO DEL TEMPO DI ARRIVO
-LAMBDA = LAMBDA_G + LAMBDA_ON
-P_ON = LAMBDA_ON / LAMBDA
+LAMBDA_A = GAMMA * 0.6          # Tasso medio complessivo degli arrivi alla zona Check-In A
+LAMBDA_E = GAMMA * 0.4          # Tasso medio complessivo degli arrivi che usufruiscono della zona Check-In B e C
 
-# -------------------- Tempi di Servizio --------------------
-# Base campana: μ±3σ (99.7% dei valori)
+# -------------------- Check-In tradizionale --------------
+LAMBDA_T    = LAMBDA_A * P_T
+LAMBDA_BC   = LAMBDA_T * P_T_B      # Tasso medio d'arrivo al centro Business-Class
+LAMBDA_PE   = LAMBDA_T * P_T_PE     # Tasso medio d'arrivo al centro Premium-Economy
+LAMBDA_ECO  = LAMBDA_T * P_T_E      # Tasso medio d'arrivo al centro Economy
+LAMBDA_BM   = LAMBDA_T * P_T_OB     # Tasso medio d'arrivo per Bagaglio a Mano
 
-MU_OC = 1 / 15      # Tempo di servizio medio 15 minuti PV Sportello
-SIGMA_OC = 5 / 3    # Deviazione standard 5 minuti PV Sportello
+LAMBDA_2 = LAMBDA_BM + LAMBDA_ECO + LAMBDA_PE
 
-MU_SR = 1 / 4.5     # Tempo di servizio medio 4.5 minuti
-SIGMA_SR = 2 / 3    # Deviazione standard 2 minuti
+# -------------------- Check-In Low-Cost --------------
+LAMBDA_LC       = LAMBDA_A * P_L
+LAMBDA_FP       = (LAMBDA_LC * P_L_NOB) * P_L_FP        # Tasso medio d'arrivo al centro Flexi-Plus
+LAMBDA_SBD      = (LAMBDA_LC * P_L_NOB) * P_L_SB_e_D    # Tasso medio d'arrivo al centro Self Bag and Drop
+LAMBDA_BD       = (LAMBDA_LC * P_L_NOB)  * P_L_B_e_D    # Tasso medio d'arrivo al centro Bag and Drop
+LAMBDA_BM_LC    = LAMBDA_LC * P_L_OB                    # Tasso medio d'arrivo per Bagaglio a Mano
 
-MU_ATM = 1 / 2.5    # Tempo di servizio medio 2.5 minuti PV ATM
-SIGMA_ATM = 1 / 3   # Deviazione standard 1 minuto PV ATM
+LAMBDA_3 = LAMBDA_SBD + LAMBDA_BD + LAMBDA_BM_LC
 
-MU_LOCKER = 1 / 1       # Tempo di servizio medio 1 minuto Locker
-SIGMA_LOCKER = 0.5 / 3  # Deviazione standard 0.5 minuti Locker
+# -------------------- Ingresso Area di Sicurezza -------------
+LAMBDA_4 = LAMBDA_2 + LAMBDA_3
+LAMBDA_5 = LAMBDA_4 + LAMBDA_E
+
+# -------------------- Fast-Track --------------------------------
+# Valido sia per l'ingresso al tornello che per l'ingresso all'aera di sicurezza riservato all'area Fast-Track
+LAMBDA_6 = (LAMBDA_5 * P_FT) + LAMBDA_BC + LAMBDA_FP
+
+# -------------------- Normale --------------------------------
+# Valido sia per l'ingresso al tornello che per l'ingresso all'aera di sicurezza riservato all'area Normale
+LAMBDA_7 = (LAMBDA_5 * P_N)
+
+# -------------------- Tempi di Servizio -----------------------
+
+# -------------------- Check-In Tradizionale E Low-Cost -Flexi-Plus-   --------------------------
+MU_DESK = 1 / 3                         # Tempo di servizio medio 3 minuti
+SIGMA_DESK = 0.165                      # Deviazione standard
+
+MU_DESK_LOW_COST_BAG_DROP = 1           # Tempo di servizio medio 1 minuti
+SIGMA_DESK_BAG_DROP = 0.242             # Deviazione standard
+
+# -------------------- Tornello (Fast-Track e Normale) -----------------
+MU_DESK_LOW_COST = 1 / 3                # Tempo di servizio medio 3 minuti
+
+# -------------------- Controlli Sicurezza -----------------------------
+MU_CONTROLLI_SICUREZZA = 1 / 4          # Tempo di servizio medio 4 minuti
+SIGMA_CONTROLLI_SICUREZZA = 0.667       # Deviazione standard
+
 # -------------------- Stream Index --------------------
-
 # Stream Associati agli arrivi
 CLASSIC_ONLINE_STREAM = 0
 CLASSIC_DIFF_STREAM = 1
@@ -162,23 +209,6 @@ LOCKER_STREAM = 8
 CLASSIC_SERVICE_STREAM = 9  # I multi-server
 SR_SERVICE_STREAM = 10      # Il server Spedizioni e Ritiri
 ATM_SERVICE_STREAM = 11     # Lo sportello ATM
-
-if IMPROVED_SIM:
-    LOCKER_SERVICE_STREAM = 12  # Il locker
-
-# -------------------- Probabilità --------------------
-
-P_DIFF = 0.15  # Probabilità di persona in difficoltà
-
-# Probabilità di scelta dell'operazione
-P_OC = 0.45      # Probabilità di Operazione Classica
-P_SR = 0.2     # Probabilità di Spedizione e Ritiri
-P_ATM = 0.35    # Probabilità di ATM
-
-# Probabilità di scelta dell'operazione online
-P_OC_ON = 0.6  # Probabilità di Operazione Classica online
-P_SR_ON = 0.4  # Probabilità di Spedizione e Ritiri online
-
 
 # -------------------- CSV FILE NAME --------------------
 DIRECTORY_FINITE_H = "./finite_horizon/"

@@ -25,7 +25,7 @@
 #  *                   Steve Park and Keith Miller
 #  *              Communications of the ACM, October 1988
 #  *
-#  * Name            : rngs.c  (Random Number Generation - Multiple Streams)
+#  * Name            : rng.c  (Random Number Generation - Multiple Streams)
 #  * Authors         : Steve Park & Dave Geyer
 #  * Language        : ANSI C
 #  * Latest Revision : 09-22-98
@@ -63,11 +63,11 @@ def random():
     # */
     global seed
 
-    Q = int(MODULUS / MULTIPLIER)
-    R = int(MODULUS % MULTIPLIER)
+    q = int(MODULUS / MULTIPLIER)
+    r = int(MODULUS % MULTIPLIER)
 
-    t = int(MULTIPLIER * (seed[stream] % Q) - R * int(seed[stream] / Q))
-    if (t > 0):
+    t = int(MULTIPLIER * (seed[stream] % q) - r * int(seed[stream] / q))
+    if t > 0:
         seed[stream] = int(t)
     else:
         seed[stream] = int(t + MODULUS)
@@ -88,8 +88,8 @@ def plant_seeds(x):
     global stream
     global seed
 
-    Q = int(MODULUS / A256)
-    R = int(MODULUS % A256)
+    q = int(MODULUS / A256)
+    r = int(MODULUS % A256)
 
     initialized = 1
     s = stream  # /* remember the current stream */
@@ -97,8 +97,8 @@ def plant_seeds(x):
     put_seed(x)  # /* set seed[0]                 */
     stream = s  # /* reset the current stream    */
     for j in range(1, STREAMS):
-        x = int(A256 * (seed[j - 1] % Q) - R * int((seed[j - 1] / Q)))
-        if (x > 0):
+        x = int(A256 * (seed[j - 1] % q) - r * int((seed[j - 1] / q)))
+        if x > 0:
             seed[j] = x
         else:
             seed[j] = x + MODULUS
@@ -173,7 +173,7 @@ def test_random():
     plant_seeds(1)  # /* set the state of all streams    */
     x = get_seed()  # /* get the state of stream 1       */
     ok = (ok == True) and (x == A256)  # /* x should be the jump multiplier */
-    if (ok == True):
-        print("\n The implementation of Rngs.py is correct")
+    if ok:
+        print("\n The implementation of rng.py is correct")
     else:
-        print("\n ERROR - the implementation of Rngs.py is not correct")
+        print("\n ERROR - the implementation of rng.py is not correct")
