@@ -41,7 +41,6 @@
 
 # -------------------- PARAMETRI DI CONFIGURAZIONE --------------------
 VERBOSE = False
-IMPROVED_SIM = True
 
 #  -------------------- PARAMETRI DI SIMULAZIONE (dipendenti da parametri di configurazione) --------------------
 
@@ -64,10 +63,6 @@ TORNELLO_NORMALE_3_SERVER_INDEX         = [17]
 TORNELLO_NORMALE_4_SERVER_INDEX         = [18]
 SICUREZZA_NORMALE_SERVER_INDEX          = [19, 20, 21, 22, 23, 24]
 
-
-
-
-
 # -------------------- Indici delle code Check-In --------------------
 BUSINESS_CLASS_QUEUE             = [0]
 PREMIUM_ECONOMY_CLASS_QUEUE      = [1]
@@ -81,25 +76,48 @@ BD_MULTI_SERVER_QUEUE            = [5]
 TORNELLO_FAST_TRACK_QUEUE        = [6]
 SICUREZZA_FAST_TRACK_QUEUE       = [7]
 
-# -------------------- Indici dei serventi Normali --------------------
-TORNELLO_NORMALE_1_SERVER_INDEX         = [15]
-TORNELLO_NORMALE_2_SERVER_INDEX         = [16]
-TORNELLO_NORMALE_3_SERVER_INDEX         = [17]
-TORNELLO_NORMALE_4_SERVER_INDEX         = [18]
-SICUREZZA_NORMALE_SERVER_INDEX          = [19, 20, 21, 22, 23, 24]
+# -------------------- Indici dei code Normali --------------------
+TORNELLO_NORMALE_1_QUEUE         = [8]
+TORNELLO_NORMALE_2_QUEUE         = [9]
+TORNELLO_NORMALE_3_QUEUE         = [10]
+TORNELLO_NORMALE_4_QUEUE         = [11]
+SICUREZZA_NORMALE_QUEUE          = [12]
 
-#  Indici delle code associate ai serventi --------------------
-MULTI_SERVER_QUEUES = [0, 1, 2]     # Indici delle code servite dal multiserver
-SR_SERVER_QUEUES = [3, 4, 5]        # Indici delle code servite dal server Spedizioni e ritiri
-ATM_SERVER_QUEUES = [6, 7]          # Indici delle code servite dal server ATM
-LOCKER_SERVER_QUEUES = [8]
 
-SERVER_NUM = len(MULTI_SERVER_INDEX) + len(SR_SERVER_INDEX) + len(ATM_SERVER_INDEX)
-QUEUES_NUM = len(MULTI_SERVER_QUEUES) + len(SR_SERVER_QUEUES) + len(ATM_SERVER_QUEUES)  # Numero di code TOTALI
+# ------------------- Server -------------------------------------------
+SERVER_NUM_AREA_CHECK_IN    = (len(BUSINESS_CLASS_SERVER_INDEX)         +
+                              len(PREMIUM_ECONOMY_CLASS_SERVER_INDEX)   +
+                              len(ECONOMY_CLASS_MULTI_SERVER_INDEX)     +
+                              len(FLEXI_PLUS_SERVER_INDEX)              +
+                              len(SELF_BD_MULTI_SERVER_INDEX)           +
+                              len(BD_MULTI_SERVER_INDEX)                )
 
-if IMPROVED_SIM and LOCKER:
-    SERVER_NUM += len(LOCKER_SERVER_INDEX)
-    QUEUES_NUM += len(LOCKER_SERVER_QUEUES)     # Numero di code TOTALI
+SERVER_NUM_AREA_FAST_TRACK = (len(TORNELLO_FAST_TRACK_SERVER_INDEX)     +
+                              len(SICUREZZA_FAST_TRACK_SERVER_INDEX)    )
+
+SERVER_NUM_AREA_NORMALE     = (len(TORNELLO_NORMALE_1_SERVER_INDEX)     +
+                              len(TORNELLO_NORMALE_2_SERVER_INDEX)      +
+                              len(TORNELLO_NORMALE_3_SERVER_INDEX)      +
+                              len(TORNELLO_NORMALE_4_SERVER_INDEX)      +
+                              len(SICUREZZA_NORMALE_SERVER_INDEX)       )
+
+# ------------------- Code -------------------------------------------
+QUEUES_NUM_AREA_CHECK_IN    = (len(BUSINESS_CLASS_QUEUE)                +
+                               len(PREMIUM_ECONOMY_CLASS_QUEUE)         +
+                               len(ECONOMY_CLASS_MULTI_QUEUE)           +
+                               len(FLEXI_PLUS_SERVER_QUEUE)             +
+                               len(SELF_BD_MULTI_SERVER_QUEUE)          +
+                               len(BD_MULTI_SERVER_QUEUE)               )
+
+QUEUES_NUM_AREA_FAST_TRACK = (len(TORNELLO_FAST_TRACK_QUEUE)            +
+                              len(SICUREZZA_FAST_TRACK_QUEUE)           )
+
+QUEUES_NUM_AREA_NORMALE     = (len(TORNELLO_NORMALE_1_QUEUE)            +
+                              len(TORNELLO_NORMALE_2_QUEUE)             +
+                              len(TORNELLO_NORMALE_3_QUEUE)             +
+                              len(TORNELLO_NORMALE_4_QUEUE)             +
+                              len(SICUREZZA_NORMALE_QUEUE)              )
+
 
 # -------------------- Tempi di Arrivo --------------------
 
