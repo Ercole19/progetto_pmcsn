@@ -75,7 +75,7 @@ def random():
     return float(seed[stream] / MODULUS)
 
 
-def plantSeeds(x):
+def plant_seeds(x):
     # /* --------------------------------------------------------------------
     #  * Use this function to set the state of all the random number generator
     #  * streams by "planting" a sequence of states (seeds), one per stream,
@@ -93,8 +93,8 @@ def plantSeeds(x):
 
     initialized = 1
     s = stream  # /* remember the current stream */
-    selectStream(0)  # /* change to stream 0          */
-    putSeed(x)  # /* set seed[0]                 */
+    select_stream(0)  # /* change to stream 0          */
+    put_seed(x)  # /* set seed[0]                 */
     stream = s  # /* reset the current stream    */
     for j in range(1, STREAMS):
         x = int(A256 * (seed[j - 1] % Q) - R * int((seed[j - 1] / Q)))
@@ -104,7 +104,7 @@ def plantSeeds(x):
             seed[j] = x + MODULUS
 
 
-def putSeed(x):
+def put_seed(x):
     # /* -------------------------------------------------------------------
     #  * Use this (optional) procedure to initialize or reset the state of
     #  * the random number generator according to the following conventions:
@@ -117,25 +117,25 @@ def putSeed(x):
 
     ok = False
 
-    if (x > 0):
+    if x > 0:
         x = x % MODULUS
         # correct if x is too large
-    if (x < 0):
+    if x < 0:
         x = time()
         x = x % MODULUS
 
-    if (x == 0):
-        while (ok == False):
+    if x == 0:
+        while not ok:
             line = input("\nEnter a positive integer seed (9 digits or less) >> ")
             x = int(line)
             ok = (0 < x) and (x < MODULUS)
-            if (ok == False):
+            if not ok:
                 print("\nInput out of range ... try again\n")
 
     seed[stream] = int(x)
 
 
-def getSeed():
+def get_seed():
     # /* --------------------------------------------------------------------
     #  * Use this (optional) procedure to get the current state of the random
     #  * number generator.
@@ -144,7 +144,7 @@ def getSeed():
     return seed[stream]
 
 
-def selectStream(index):
+def select_stream(index):
     # /* ------------------------------------------------------------------
     # * Use this function to set the current random number generator
     # * stream -- that stream from which the next random number will come.
@@ -154,27 +154,24 @@ def selectStream(index):
 
     stream = index % STREAMS
     if (initialized == 0) and (stream != 0):  # /* protect against        */
-        plantSeeds(DEFAULT)  # /* un-initialized streams */
+        plant_seeds(DEFAULT)  # /* un-initialized streams */
 
 
-def testRandom():
+def test_random():
     # /* -------------------------------------------------------------------
     #  * Use this (optional) procedure to test for a correct implementation.
     #  * -------------------------------------------------------------------
     #  */
 
-    ok = False
+    select_stream(0)  # /* select the default stream */
+    put_seed(1)  # /* and set the state to 1    */
 
-    selectStream(0)  # /* select the default stream */
-    putSeed(1)  # /* and set the state to 1    */
-    for i in range(0, 10000):
-        u = random()
-    x = getSeed()  # /* get the new state value   */
+    x = get_seed()  # /* get the new state value   */
     ok = (x == CHECK)  # /* and check for correctness */
 
-    selectStream(1)  # /* select stream 1                 */
-    plantSeeds(1)  # /* set the state of all streams    */
-    x = getSeed()  # /* get the state of stream 1       */
+    select_stream(1)  # /* select stream 1                 */
+    plant_seeds(1)  # /* set the state of all streams    */
+    x = get_seed()  # /* get the state of stream 1       */
     ok = (ok == True) and (x == A256)  # /* x should be the jump multiplier */
     if (ok == True):
         print("\n The implementation of Rngs.py is correct")

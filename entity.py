@@ -4,13 +4,13 @@ class Times:
     def __init__(self):
         self.current = 0  # System clock - Avanzamento del tempo solo all'occorrenza di un next event
         self.next = 0  # Occurrence of the next event
-        self.last = [0 for _ in range(QUEUES_NUM)]  # Last arrival time for each flow - NUMBER_OF_QUEUES elements
+        self.last = [0 for _ in range(QUEUES_NUM_AREA_CHECK_IN + QUEUES_NUM_AREA_NORMALE + QUEUES_NUM_AREA_FAST_TRACK)]  # Last arrival time for each flow - NUMBER_OF_QUEUES elements
 
 
 class EventList:
     def __init__(self):
         self.arrivals = []  # Arrival events list, each element is a type of operation
-        self.completed = [Event('C') for _ in range(SERVER_NUM)]  # Completed events list
+        self.completed = [Event('C') for _ in range(SERVER_NUM_AREA_CHECK_IN + SERVER_NUM_AREA_NORMALE + SERVER_NUM_AREA_FAST_TRACK)]  # Completed events list
         self.sampling = None  # Sampling event
 
 

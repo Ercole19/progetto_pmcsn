@@ -36,7 +36,7 @@
 #
 # --------------------------------------------------------------------------
 
-from libs.rngs import random
+from rng.rng import random
 from math import log, sqrt, exp
 
 
@@ -65,7 +65,7 @@ def Binomial(n, p):
     return (x)
 
 
-def Equilikely(a, b):
+def equilikely(a, b):
     # ===================================================================
     # Returns an equilikely distributed integer between a and b inclusive.
     # NOTE: use a < b
@@ -73,7 +73,7 @@ def Equilikely(a, b):
     return (a + int((b - a + 1) * random()))
 
 
-def Geometric(p):
+def geometric(p):
     # ====================================================
     # Returns a geometric distributed non-negative integer.
     # NOTE: use 0.0 < p < 1.0
@@ -83,7 +83,7 @@ def Geometric(p):
     return (int(log(1.0 - random()) / log(p)))
 
 
-def Pascal(n, p):
+def pascal(n, p):
     # =================================================
     # Returns a Pascal distributed non-negative integer.
     # NOTE: use n > 0 and 0.0 < p < 1.0
@@ -97,7 +97,7 @@ def Pascal(n, p):
     return (x)
 
 
-def Poisson(m):
+def poisson(m):
     # ==================================================
     # Returns a Poisson distributed non-negative integer.
     # NOTE: use m > 0
@@ -113,7 +113,7 @@ def Poisson(m):
     return (x - 1)
 
 
-def Uniform(a, b):
+def uniform(a, b):
     # ===========================================================
     # Returns a uniformly distributed real number between a and b.
     # NOTE: use a < b
@@ -122,7 +122,7 @@ def Uniform(a, b):
     return (a + (b - a) * random())
 
 
-def Exponential(m):
+def exponential(m):
     # =========================================================
     # Returns an exponentially distributed positive real number.
     # NOTE: use m > 0.0
@@ -131,7 +131,7 @@ def Exponential(m):
     return (-m * log(1.0 - random()))
 
 
-def Erlang(n, b):
+def erlang(n, b):
     # ==================================================
     # Returns an Erlang distributed positive real number.
     # NOTE: use n > 0 and b > 0.0
@@ -144,7 +144,7 @@ def Erlang(n, b):
     return (x)
 
 
-def Normal(m, s):
+def normal(m, s):
     # ========================================================================
     # Returns a normal (Gaussian) distributed real number.
     # NOTE: use s > 0.0
@@ -181,7 +181,7 @@ def Normal(m, s):
     return (m + s * z)
 
 
-def Lognormal(a, b):
+def lognormal(a, b):
     # ====================================================
     # Returns a lognormal distributed positive real number.
     # NOTE: use b > 0.0
@@ -199,13 +199,13 @@ def Chisquare(n):
     x = 0.0
 
     for i in range(0, n):
-        z = Normal(0.0, 1.0)
+        z = normal(0.0, 1.0)
         x += z * z
 
     return (x)
 
 
-def Student(n):
+def student(n):
     # ===========================================
     # Returns a student-t distributed real number.
     # NOTE: use n > 0
@@ -214,13 +214,13 @@ def Student(n):
     return (Normal(0.0, 1.0) / sqrt(Chisquare(n) / n))
 
 
-def testFunctions():
+def test_functions():
     # tests to ensure that all variates match what was produced by C version of program (with the same order and parameters)
 
     # bernoulli
     bern = []
     for i in range(0, 10):
-        bern.append(Bernoulli(.65))
+        bern.append(bernoulli(.65))
 
     if (bern == [0, 0, 1, 0, 1, 0, 1, 1, 1, 1]):
         print("Bernoulli test passed")
@@ -280,7 +280,7 @@ def testFunctions():
     if (round(exp, 6) == 4.796404):
         print("Exponential test passed!")
     else:
-        print("FIX EXP. Produced: ", exp)
+        print("FIX EXP. Produced: ", expo)
         print("expected: 4.796404")
 
     # erlang test

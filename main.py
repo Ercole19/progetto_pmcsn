@@ -36,7 +36,7 @@ def finite_horizon_run():
     plantSeeds(SEED)
     # Esecuzione delle repliche
     for ri in range(REPLICATION_NUM):
-        print("Starting replica for finite-horizon simulation, seed: ", getSeed())
+        print("Starting replica for finite-horizon simulation, seed: ", get_seed())
         # plantSeeds(getSeed())
         start_simulation(end_simulation_time, "finite", SAMPLING_RATE)
         selectStream(0)
@@ -54,7 +54,7 @@ def infinite_horizon_run():
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     # Inizializza il generatore di numeri casuali
-    plantSeeds(SEED)
+    plant_seeds(SEED)
 
     if INFINITE_HORIZON:
         infinite_horizon_run()
