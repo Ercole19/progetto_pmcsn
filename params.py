@@ -127,7 +127,7 @@ QUEUES_NUM_AREA_NORMALE     = (len(TORNELLO_NORMALE_1_QUEUE)            +
 P_T = 0.20              # Probabilità che un passeggero scelga una compagnia Tradizionale
 P_L = 0.80              # Probabilità che un passeggero scelga una compagnia Low-Cost
 
-P_T_B = 0.1             # Probabilità che un passeggero scelga la tariffa Business-Class
+P_T_B = 0.10             # Probabilità che un passeggero scelga la tariffa Business-Class
 P_T_PE = 0.20           # Probabilità che un passeggero scelga la tariffa Premium-Economy
 P_T_E = 0.45            # Probabilità che un passeggero scelga la tariffa Economy
 P_T_OB = 0.25           # Probabilità che un passeggero abbia effettuato check-in online e non abbia il bagaglio da stiva
