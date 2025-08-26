@@ -60,6 +60,7 @@ TORNELLO_NORMALE_1_SERVER_INDEX         = [15]
 TORNELLO_NORMALE_2_SERVER_INDEX         = [16]
 TORNELLO_NORMALE_3_SERVER_INDEX         = [17]
 TORNELLO_NORMALE_4_SERVER_INDEX         = [18]
+TORNELLI_NORMALI_SERVER_INDEXES = [15,16,17,18]
 SICUREZZA_NORMALE_SERVER_INDEX          = [19, 20, 21, 22, 23, 24]
 
 # -------------------- Indici delle code Check-In --------------------
@@ -80,16 +81,20 @@ TORNELLO_NORMALE_1_QUEUE         = [8]
 TORNELLO_NORMALE_2_QUEUE         = [9]
 TORNELLO_NORMALE_3_QUEUE         = [10]
 TORNELLO_NORMALE_4_QUEUE         = [11]
+TORNELLI_NORMALI_INDEXES         = [8, 9, 10, 11]
 SICUREZZA_NORMALE_QUEUE          = [12]
 
 
+
 # ------------------- Server -------------------------------------------
-SERVER_NUM_AREA_CHECK_IN    = (len(BUSINESS_CLASS_SERVER_INDEX)         +
+CLASSIC_SERVER_NUM_AREA_CHECK_IN    = (len(BUSINESS_CLASS_SERVER_INDEX)         +
                               len(PREMIUM_ECONOMY_CLASS_SERVER_INDEX)   +
                               len(ECONOMY_CLASS_MULTI_SERVER_INDEX)     +
-                              len(FLEXI_PLUS_SERVER_INDEX)              +
-                              len(SELF_BD_MULTI_SERVER_INDEX)           +
-                              len(BD_MULTI_SERVER_INDEX)                )
+                              len(FLEXI_PLUS_SERVER_INDEX)
+                                  )
+
+BAG_DROP_CHECK_IN_SERVERS = (len(SELF_BD_MULTI_SERVER_INDEX)           +
+                              len(BD_MULTI_SERVER_INDEX)          )
 
 SERVER_NUM_AREA_FAST_TRACK = (len(TORNELLO_FAST_TRACK_SERVER_INDEX)     +
                               len(SICUREZZA_FAST_TRACK_SERVER_INDEX)    )
@@ -168,11 +173,11 @@ LAMBDA_5 = LAMBDA_4 + LAMBDA_E
 
 # -------------------- Fast-Track --------------------------------
 # Valido sia per l'ingresso al tornello che per l'ingresso all'aera di sicurezza riservato all'area Fast-Track
-LAMBDA_6 = (LAMBDA_5 * P_FT) + LAMBDA_BC + LAMBDA_FP
+LAMBDA_6 = (LAMBDA_4 * P_FT) + LAMBDA_BC + LAMBDA_FP
 
 # -------------------- Normale --------------------------------
 # Valido sia per l'ingresso al tornello che per l'ingresso all'aera di sicurezza riservato all'area Normale
-LAMBDA_7 = (LAMBDA_5 * P_N)
+LAMBDA_7 = (LAMBDA_4 * P_N)
 
 # -------------------- Tempi di Servizio -----------------------
 
@@ -190,6 +195,9 @@ MU_DESK_LOW_COST = 1 / 3                # Tempo di servizio medio 3 minuti
 MU_CONTROLLI_SICUREZZA = 1 / 4          # Tempo di servizio medio 4 minuti
 SIGMA_CONTROLLI_SICUREZZA = 0.667       # Deviazione standard
 
+
+
+########################################################################################################
 # -------------------- Stream Index --------------------
 # Stream Associati agli arrivi
 CLASSIC_ONLINE_STREAM = 0
@@ -209,6 +217,9 @@ LOCKER_STREAM = 8
 CLASSIC_SERVICE_STREAM = 9  # I multi-server
 SR_SERVICE_STREAM = 10      # Il server Spedizioni e Ritiri
 ATM_SERVICE_STREAM = 11     # Lo sportello ATM
+###########################################################################################################
+
+
 
 # -------------------- CSV FILE NAME --------------------
 DIRECTORY_FINITE_H = "./finite_horizon/"

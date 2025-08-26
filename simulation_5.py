@@ -1,0 +1,428 @@
+import heapq
+from collections import deque
+from distributions.distributions import exponential, lognormal
+from params import *
+from rng.rng import *
+
+# -------------------- Server --------------------
+class Server:
+    def __init__(self, name, service_time_generator, debug=True):
+        self.name = name
+        self.service_time_generator = service_time_generator
+        self.state = 0  # 0=free, 1=busy
+        self.arrivals = []
+        self.completed = []
+        self.num_in_system = 0
+        self.total_busy_time = 0.0
+        self.debug = debug
+
+    def update_busy_time(self):
+        delta = max(0.0, self.completed[-1] - self.arrivals[-1])
+        if self.state == 1:
+            self.total_busy_time += delta
+
+    def start_service(self, event, event_list, new_time=None):
+        self.state = 1
+        service_time = max(1e-3, self.service_time_generator())
+        time_to_log = new_time if new_time is not None else event.event_time
+
+        if self.debug:
+            print(f"t={time_to_log:.2f} | START | {self.name} serving {event.op_index} "
+                  f"(completion at {time_to_log + service_time:.2f})")
+
+        # Always push a tuple with (time, type, server, event)
+        heapq.heappush(event_list, (time_to_log + service_time, "C", self, event))
+
+    def handle_departure(self, event, event_list, passenger_routing=None, pool=None, completion_time=None):
+        completion_time = completion_time if completion_time is not None else event.event_time
+        self.completed.append(completion_time)
+        self.num_in_system -= 1
+        self.update_busy_time()
+        self.state = 0
+
+        if self.debug:
+            print(f"t={completion_time:.2f} | DEPARTURE | {self.name} finished {event.op_index}")
+
+        #Controlla se ci sono altri eventi in coda e li schedula
+        pool.start_next(event_list)
+
+        # Schedule next center if defined
+        next_center_name = getattr(event, "next_center", None)
+
+        if next_center_name is not None:
+            new_event = Event(completion_time, "A", next_center_name)
+            heapq.heappush(event_list, (new_event.event_time, "A", new_event))
+
+        '''next_ptype = None
+        if passenger_routing and next_center_name:
+            if next_center_name == "turnstile_area":
+                select_stream(20)
+                r = random()
+                fast_track_or_no = "fast" if r < 0.2 else "normal"
+                if fast_track_or_no == "fast":
+                    next_ptype = passenger_routing.get("fast_track_turnstile")
+                else:
+                    next_ptype = passenger_routing.get("turnstile")
+
+                print(f"  [ROUTING] {next_center_name} passenger → {fast_track_or_no} priority")
+            
+            if next_ptype:
+                new_event = Event(completion_time, "A", next_center_name)
+                new_event.next_center = next_ptype.next_center
+                next_ptype.server_pool.assign_event(new_event, event_list)'''
+
+
+    def utilization(self, current_time):
+        return self.total_busy_time / max(1e-9, current_time)
+
+# -------------------- Server Pool --------------------
+class ServerPool:
+    def __init__(self, servers, debug=True):
+        self.servers = servers
+        self.queue = deque()  # shared queue for all servers in this pool
+        self.debug = debug
+
+    def assign_event(self, event, event_list):
+        free_server = next((s for s in self.servers if s.state == 0), None)
+        if free_server:
+            free_server.start_service(event, event_list)
+            free_server.arrivals.append(event.event_time)
+            free_server.num_in_system += 1
+        else:
+            self.queue.append(event)
+            if self.debug:
+                print(f"All servers busy → added to shared pool queue (length={len(self.queue)})")
+
+    def start_next(self, event_list):
+        while self.queue:
+            free_server = next((s for s in self.servers if s.state == 0), None)
+            if not free_server:
+                break
+            next_event = self.queue.popleft()
+            free_server.start_service(next_event, event_list)
+            free_server.arrivals.append(next_event.event_time)
+            free_server.num_in_system += 1
+
+    def total_in_system(self):
+        return sum(s.num_in_system for s in self.servers) + len(self.queue)
+
+    def avg_utilization(self, current_time):
+        return sum(s.utilization(current_time) for s in self.servers) / len(self.servers)
+
+
+# -------------------- Passenger & Event --------------------
+class PassengerType:
+    def __init__(self, name, server_pool, next_center=None):
+        self.name = name
+        self.server_pool = server_pool
+        self.next_center = next_center
+
+class Event:
+    def __init__(self, event_time=0.0, event_type='A', op_index=None):
+        self.event_time = event_time
+        self.event_type = event_type
+        self.op_index = op_index
+        self.next_center = None
+        self.exogenous = False
+
+class Times:
+    def __init__(self):
+        self.current = 0.0
+        self.next = 0.0
+
+
+# -------------------- Airport Simulation --------------------
+class AirportSimulation:
+    def __init__(self, end_time, sampling_rate, type_simulation="finite", batch_num = 0):
+        self.end_time = end_time
+        self.sampling_rate = sampling_rate
+        self.batch_num = batch_num
+        self.processed_batch = 0
+        self.type_simulation = type_simulation
+        self.times = Times()
+        self.event_list = []
+        self.servers = []
+        self.server_pools = {}
+        self.completed_jobs = 0
+        self.passenger_routing = {}
+        self.metrics = []
+        self.last_arrival_time = {}
+        self.current_slot = None
+        self.time_slots = [
+            (0, 359*60          , "night"),
+            (360*60, 539*60     , "morning"),
+            (540*60, 719*60     , "late_morning"),
+            (720*60, 899*60     , "early_afternoon"),
+            (900*60, 1139*60    , "late_afternoon"),
+            (1140*60, 1319*60   , "evening"),
+            (1320*60, 1440*60   , "late_evening"),
+        ]
+        self.next_sampling = self.sampling_rate
+        self.init_servers_and_pools()
+        self.init_time_slot_events()
+
+    # -------------------- Time slots --------------------
+    def init_time_slot_events(self):
+        for start, end, name in self.time_slots:
+            if start <= self.end_time:
+                heapq.heappush(self.event_list, (start, "H", name))
+        self.update_current_slot(0)
+
+    def update_current_slot(self, current_time):
+        for start, end, name in self.time_slots:
+            if start <= current_time < end:
+                self.current_slot = name
+                break
+        print(f"  [TIME SLOT] Current time slot: {self.current_slot}")
+
+    # -------------------- Servers & Pools --------------------
+    def init_servers_and_pools(self):
+        self.server_pools = {
+            "business": ServerPool([ClassicCheckInServer("business_0")]),
+            "premium_economy": ServerPool([ClassicCheckInServer("premium_economy_0")]),
+            "economy": ServerPool([ClassicCheckInServer(f"economy_{i}") for i in range(3)]),
+            "flexi_plus": ServerPool([ClassicCheckInServer("flexi_plus_0")]),
+            "self_bd": ServerPool([BagDropCheckInServer(f"self_bd_{i}") for i in range(2)]),
+            "bd": ServerPool([BagDropCheckInServer(f"bd_{i}") for i in range(4)]),
+            "fast_track_turnstiles": ServerPool([TurnstileServer("fast_track_turnstile_0")]),
+            "fast_track_security_area": ServerPool([SecurityCheckServer(f"fast_track_sec_{i}") for i in range(2)]),
+            "turnstiles": ServerPool([TurnstileServer(f"turnstile_{i}") for i in range(4)]),
+            "security_area": ServerPool([SecurityCheckServer(f"security_{i}") for i in range(6)])
+        }
+
+        for pool in self.server_pools.values():
+            self.servers.extend(pool.servers)
+
+        self.passenger_routing = {
+            "business": PassengerType("Business", self.server_pools["business"], next_center="fast_track_turnstiles"),
+            "premium_economy": PassengerType("PremiumEconomy", self.server_pools["premium_economy"], next_center="turnstile_area"),
+            "economy": PassengerType("Economy", self.server_pools["economy"], next_center="turnstile_area"),
+            "flexi_plus": PassengerType("FlexiPlus", self.server_pools["flexi_plus"], next_center="fast_track_turnstiles"),
+            "self_bd": PassengerType("SelfBD", self.server_pools["self_bd"], next_center="turnstile_area"),
+            "bd": PassengerType("BD", self.server_pools["bd"], next_center="turnstile_area"),
+            "fast_track_turnstile": PassengerType("FastTrackTurnstile", self.server_pools["fast_track_turnstiles"], next_center="fast_track_security_area"),
+            "fast_track_security_area": PassengerType("FastTrackSecurity", self.server_pools["fast_track_security_area"]),
+            "turnstile": PassengerType("Turnstile", self.server_pools["turnstiles"], next_center="security_area"),
+            "security_area": PassengerType("Security", self.server_pools["security_area"])
+        }
+
+    # -------------------- Interarrival --------------------
+    def generate_interarrival_time(self, op_index):
+        lambdas = {
+            "business": LAMBDA_BC,
+            "premium_economy": LAMBDA_PE,
+            "economy": LAMBDA_ECO,
+            "flexi_plus": LAMBDA_FP,
+            "self_bd": LAMBDA_SBD,
+            "bd": LAMBDA_BD,
+            "turnstile_area": LAMBDA_4,
+            "exogenous": LAMBDA_E,
+            "fast_track_turnstile": LAMBDA_6,
+            "security_area": LAMBDA_7,
+            "fast_track_security_area": LAMBDA_6,
+        }
+        percent= {
+            "night": 0.066,
+            "morning": 0.165,
+            "late_morning": 0.165,
+            "early_afternoon": 0.165,
+            "late_afternoon": 0.196,
+            "evening": 0.165,
+            "late_evening": 0.078
+        }
+
+        slot_multiplier = {k: v / 0.14 for k, v in percent.items()}
+
+        multiplier = slot_multiplier.get(self.current_slot)
+        lambda_rescaled = lambdas[op_index] * multiplier
+        return exponential(1 / lambda_rescaled)
+
+    # -------------------- Arrival processing --------------------
+    def process_arrival(self, event):
+        op = event.op_index
+        print(f"t={event.event_time:.2f} | ARRIVAL   | {op}")
+
+        if op in ["business", "premium_economy", "economy", "flexi_plus", "self_bd", "bd"]:
+            self.generate_new_arrival(op)
+
+        if op == "turnstile_area":
+            select_stream(20)
+            r = random()
+            fast_track_or_no = "fast" if r < 0.2 else "normal"
+
+            if fast_track_or_no == "fast":
+                pool = self.server_pools["fast_track_turnstiles"]
+                event.next_center = "fast_track_security_area"
+                event.op_index = "fast_track_turnstile"
+            else:
+                pool = self.server_pools["turnstiles"]
+                event.next_center = "security_area"
+                event.op_index = "turnstile"
+
+            print(f"  [ROUTING] {op} passenger → {fast_track_or_no} priority")
+            pool.assign_event(event, self.event_list)
+            return
+
+        ptype = self.passenger_routing[op]
+        pool = ptype.server_pool
+        pool.assign_event(event, self.event_list)
+
+        if ptype.next_center:
+            event.next_center = ptype.next_center
+
+    # -------------------- Generate new arrivals --------------------
+    def generate_new_arrival(self, op_index=None):
+        if op_index is None:
+            select_stream(0)
+            airline_type = "traditional" if random() < 0.2 else "lowcost"
+            if airline_type == "traditional":
+                select_stream(1)
+                r = random()
+                if r < 0.1: op_index = "business"
+                elif r < 0.3: op_index = "premium_economy"
+                elif r < 0.75: op_index = "economy"
+                else: op_index = "turnstile_area"
+            else:
+                select_stream(2)
+                r = random()
+                if r < 0.7: op_index = "turnstile_area"
+                else:
+                    select_stream(3)
+                    r2 = random()
+                    if r2 < 0.05: op_index = "flexi_plus"
+                    elif r2 < 0.15: op_index = "self_bd"
+                    else: op_index = "bd"
+
+        select_stream({
+            "business": 10, "premium_economy": 11, "economy": 12,
+            "flexi_plus": 13, "self_bd": 14, "bd": 15,
+            "turnstile_area": 16
+        }[op_index])
+        interarrival = self.generate_interarrival_time(op_index)
+        event_time = max(self.last_arrival_time.get(op_index, 0.0) + interarrival, self.times.next + interarrival)
+        self.last_arrival_time[op_index] = event_time
+        if event_time <= self.end_time:
+            heapq.heappush(self.event_list, (event_time, "A", Event(event_time, "A", op_index)))
+            print(f"  [SCHEDULE] New {op_index} at t={event_time:.2f}")
+
+    # -------------------- Exogenous arrivals --------------------
+    def generate_exogenous_arrival(self):
+        select_stream(30)
+        op_index = "exogenous"
+        interarrival = self.generate_interarrival_time(op_index)
+        event_time = max(self.last_arrival_time.get("exog_BC", 0.0) + interarrival, self.times.next + interarrival)
+        self.last_arrival_time["exog_BC"] = event_time
+        if event_time <= self.end_time:
+            arrival_time = event_time + self.transit_time_exogenous()
+            event = Event(arrival_time, "E", "turnstile_area")
+            event.exogenous = True
+            heapq.heappush(self.event_list, (arrival_time, "E", event))
+            print(f"  [SCHEDULE] Exogenous B+C passenger at t={arrival_time:.2f} (generated at {event_time:.2f})")
+
+    def transit_time_exogenous(self):
+        return lognormal(5.1895, 0.08319)
+
+    # -------------------- Process next event --------------------
+    def process_next_event(self):
+        if not self.event_list:
+            return None, None
+
+        item = heapq.heappop(self.event_list)
+
+        if len(item) == 3:
+            time, event_type, event = item
+            server = None
+        else:
+            time, event_type, server, event = item
+
+        self.times.next = time
+
+        if event_type in ["A", "E"]:
+            self.process_arrival(event)
+        elif event_type == "C" and server is not None:
+            ptype = self.passenger_routing.get(event.op_index)
+            pool = ptype.server_pool if ptype else None
+            server.handle_departure(event, self.event_list, passenger_routing=self.passenger_routing, pool=pool, completion_time=self.times.next)
+            self.completed_jobs += 1
+        elif event_type == "H":
+            self.update_current_slot(time)
+            print(f"t={self.times.next:.2f} | TIME SLOT CHANGE → {self.current_slot}")
+
+        if event and self.times.next >= getattr(self, "next_sampling", 0):
+            self.collect_metrics()
+            self.next_sampling = self.times.next + self.sampling_rate
+
+
+        return event_type, event
+
+    # -------------------- Metrics --------------------
+    def collect_metrics(self):
+        snapshot = {
+            "time": self.times.next,
+            "global": {
+                "total_in_system": sum(pool.total_in_system() for pool in self.server_pools.values()),
+                "avg_utilization": sum(
+                    pool.avg_utilization(self.times.next) for pool in self.server_pools.values()) / len(
+                    self.server_pools),
+                "avg_queue_length": sum(len(pool.queue) for pool in self.server_pools.values()) / len(self.server_pools)
+            },
+            "servers": [],
+            "queue_lengths": []
+        }
+        for s in self.servers:
+            snapshot["servers"].append({
+                "name": s.name,
+                "in_system": s.num_in_system,
+                "busy": s.state,
+                "utilization": s.utilization(self.times.next)
+            })
+
+        for pool_name, pool in self.server_pools.items():
+            snapshot["queue_lengths"].append({
+                "name": pool_name,
+                "length": len(pool.queue)
+            })
+
+        self.metrics.append(snapshot)
+
+    # -------------------- Run --------------------
+    def run(self):
+        self.next_sampling = self.sampling_rate
+        self.generate_new_arrival()
+        self.generate_exogenous_arrival()
+        if self.type_simulation == "finite":
+            while self.event_list and self.times.next <= self.end_time:
+                event_type, event = self.process_next_event()
+                if event and getattr(event, "exogenous", False):
+                    self.generate_exogenous_arrival()
+        else :
+            while self.processed_batch < self.batch_num:
+                #if VERBOSE: print_status()
+                event_type, event = self.process_next_event()
+                if event and getattr(event, "exogenous", False):
+                    self.generate_exogenous_arrival()
+
+                if self.completed_jobs == self.sampling_rate and self.completed_jobs != 0:
+                    self.collect_metrics()
+                    self.next_sampling = self.completed_jobs + self.sampling_rate
+                    print(f"Batch {self.processed_batch}/{self.batch_num}")
+        return self.metrics
+
+
+
+# -------------------- Specialized Servers --------------------
+class ClassicCheckInServer(Server):
+    def __init__(self, name):
+        super().__init__(name, lambda: lognormal(5.1895, 0.08319))
+
+class BagDropCheckInServer(Server):
+    def __init__(self, name):
+        super().__init__(name, lambda: lognormal(4.064, 0.246))
+
+class TurnstileServer(Server):
+    def __init__(self, name):
+        super().__init__(name, lambda: 3)
+
+class SecurityCheckServer(Server):
+    def __init__(self, name):
+        super().__init__(name, lambda: lognormal(5.46694, 0.16552))
