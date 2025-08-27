@@ -1,75 +1,98 @@
-##from Simulation import start_simulation
-import os
-
-from PIL.JpegImagePlugin import samplings
-
-from params import *
 from rng.rng import *
 from simulation_5 import AirportSimulation
-import matplotlib.pyplot as plt
 
 # Parametri della simulazione
-SEED = 987654321 #123456789 #123456789 #1359796324 # 1161688905
-seed_used = [SEED]  # Lista dei seed utilizzati per ogni replica della simulazione (Per ripetibilità)
+SEED = 123456789 #987654321 #123456789 #1359796324 # 1161688905
+seed_used = []  # Lista dei seed utilizzati per ogni replica della simulazione (Per ripetibilità)
 
 # ---------------- INFINITE HORIZON SIMULATION ----------------
 INFINITE_HORIZON = False
-BATCH_DIM = 512  # Campionamento ogni 512 job (b)
-BATCH_NUM = 1024  # Numero di batch da eseguire (k)
-INFINITE_HORIZON_TIME = BATCH_DIM * BATCH_NUM
+BATCH_DIM = 512                                     # Campionamento ogni 512 job (b)
+BATCH_NUM = 1024                                    # Numero di batch da eseguire (k)
+INFINITE_HORIZON_TIME = BATCH_DIM * BATCH_NUM       # Lunchezza del campione
 
 # ---------------- FINITE HORIZON SIMULATION ----------------
-FINITE_HORIZON = not INFINITE_HORIZON  # Se non è una simulazione a orizzonte finito allora è a orizzonte infinito
-FINITE_HORIZON_TIME = 4 * 60  # 4 ore di simulazione
-REPLICATION_NUM = 1000
-SAMPLING_RATE = 1  # Tempo di campionamento per le statistiche
+FINITE_HORIZON =        True
+FINITE_HORIZON_TIME =   86400.0     # una giornata completa all'aeroporto --> 00:00 - 23:59
+REPLICATION_NUM =       1           # numero di repliche eseguite
+SAMPLING_RATE =         120           # Tempo di campionamento per le statistiche
 
 
 def finite_horizon_run():
-    '''end_simulation_time = FINITE_HORIZON_TIME
+    all_metrics = []
 
-    # Inizializzazione file csv per le statistiche (Crea il file se non esiste o cancella contenuto se esiste)
-    directory = DIRECTORY_FINITE_H
-    files = [CSV_UTILIZATION, CSV_DELAY, CSV_WAITING_TIME, CSV_END_WORK_TIME_FINITE]
+    # Inizializza il primo seed
+    current_seed = SEED
+    seed_used.append(current_seed)
 
-    # Cancella il contenuto del file
-    for file in files:
-        with open(os.path.join(directory, file), 'w') as f:
-            f.write('')
-
-    plant_seeds(SEED)
     # Esecuzione delle repliche
-    for ri in range(REPLICATION_NUM):
-        print("Starting replica for finite-horizon simulation, seed: ", get_seed())
-        # plantSeeds(getSeed())
-        start_simulation(end_simulation_time, "finite", SAMPLING_RATE)
-        select_stream(0)
-        seed_used.append(get_seed())
-        print(f"Simulation {ri + 1}/{REPLICATION_NUM} ending seed: {get_seed()}")
-    print("fine simulazione")
-    for s in seed_used:
-        print(s)'''
+    for index in range(REPLICATION_NUM):
 
-    sim = AirportSimulation(end_time=86400.0, sampling_rate=60.0, type_simulation="finite")
-    metrics = sim.run()
+        # Contatore che tiene traccia delle repliche rimanenti
+        remaining_replica = REPLICATION_NUM - (index + 1)
+
+        print(f"\n Avvio replica {index + 1}/{REPLICATION_NUM} - Seed: {get_seed()}")
+        plant_seeds(seed_used[index])                 # imposta il seed per la replica corrente
+
+        # Crea nuova istanza della simulazione (stato pulito!)
+        sim = AirportSimulation(
+            end_time=FINITE_HORIZON_TIME,
+            sampling_rate=SAMPLING_RATE,
+            type_simulation="finite"
+        )
+
+        replica_metrics = sim.run()
+        all_metrics.append(replica_metrics)
+
+        # Prepara seed per la prossima replica, se è presente
+        if remaining_replica != 0:
+            current_seed = get_seed()
+            seed_used.append(current_seed)
+
+    # Fine ciclo repliche
+    print("Tutte le repliche finite.")
+    for s in seed_used:
+        print("Seed usato:", s)
+
+    # -------------------- STAMPA METRICHE FINALI --------------------
+    print("\n Metriche finali per ogni replica:\n")
+
+    for idx, replica_metrics in enumerate(all_metrics):
+        last_snapshot = replica_metrics[-1]  # Ultimo snapshot temporale della replica
+
+        print(f"Replica {idx + 1}:")
+        print(f"  Passeggeri da Servire: {last_snapshot['global']['total_in_system']}")
+        print(f"  Passeggeri usciti dal sistema: {last_snapshot['global']['passengers_completed']}")
+        print(f"  Lunghezza media code: {last_snapshot['global']['avg_queue_length']:.2f}")
+        print(f"  Utilizzo medio server: {last_snapshot['global']['avg_utilization']:.2f}")
+
+        print("  --> Utilizzazione per ogni centro:")
+        for s in last_snapshot["servers"]:
+            print(f"     - {s['name']}: Utilizzazione={s['utilization']:.2f}, in sistema={s['in_system']}, busy={s['busy']}")
+
+        print("  --> Lunghezza code per pool:")
+        for q in last_snapshot["queue_lengths"]:
+            print(f"     - {q['name']}: {q['length']}")
+
+        print("-" * 50)
 
     # -------------------- Extract Metrics --------------------
-    times = [m["time"] for m in metrics]
+    '''times = [m["time"] for m in all_metrics]
 
     # Global metrics
-    total_in_system = [m["global"]["total_in_system"] for m in metrics]
-    avg_queues = [m["global"]["avg_queue_length"] for m in metrics]
-    avg_utilizations = [m["global"]["avg_utilization"] for m in metrics]
+    total_in_system = [m["global"]["total_in_system"] for m in all_metrics]
+    avg_queues = [m["global"]["avg_queue_length"] for m in all_metrics]
+    avg_utilizations = [m["global"]["avg_utilization"] for m in all_metrics]
 
     # Per-server metrics
-    server_names = [s["name"] for s in metrics[0]["servers"]]
+    server_names = [s["name"] for s in all_metrics[0]["servers"]]
     server_utilizations = {name: [] for name in server_names}
 
     # Per-pool queue length
-    pool_names = [q["name"] for q in metrics[0]["queue_lengths"]]
+    pool_names = [q["name"] for q in all_metrics[0]["queue_lengths"]]
     pool_queues = {name: [] for name in pool_names}
 
-    for m in metrics:
+    for m in all_metrics:
         for s in m["servers"]:
             server_utilizations[s["name"]].append(s["utilization"])
         for q in m["queue_lengths"]:
@@ -130,7 +153,7 @@ def finite_horizon_run():
     plt.legend()
     plt.grid(True)
     plt.savefig("pool_queue_length.png")
-    plt.close()
+    plt.close()'''
 
 
 def infinite_horizon_run():
@@ -140,13 +163,13 @@ def infinite_horizon_run():
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    # Inizializza il generatore di numeri casuali
-    plant_seeds(SEED)
+
     if INFINITE_HORIZON:
         infinite_horizon_run()
 
     elif FINITE_HORIZON:
         finite_horizon_run()
+
     else:
         raise ValueError("Errore: Nessun orizzonte di simulazione selezionato")
 

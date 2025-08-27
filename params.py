@@ -197,30 +197,6 @@ SIGMA_CONTROLLI_SICUREZZA = 0.667       # Deviazione standard
 
 
 
-########################################################################################################
-# -------------------- Stream Index --------------------
-# Stream Associati agli arrivi
-CLASSIC_ONLINE_STREAM = 0
-CLASSIC_DIFF_STREAM = 1
-CLASSIC_STREAM = 2
-
-SR_ONLINE_STREAM = 3
-SR_STREAM = 5
-SR_DIFF_STREAM = 4
-
-ATM_DIFF_STREAM = 6
-ATM_STREAM = 7
-
-LOCKER_STREAM = 8
-
-# Stream Associati ai servizi
-CLASSIC_SERVICE_STREAM = 9  # I multi-server
-SR_SERVICE_STREAM = 10      # Il server Spedizioni e Ritiri
-ATM_SERVICE_STREAM = 11     # Lo sportello ATM
-###########################################################################################################
-
-
-
 # -------------------- CSV FILE NAME --------------------
 DIRECTORY_FINITE_H = "./finite_horizon/"
 DIRECTORY_INFINITE_H = "./infinite_horizon/"
