@@ -1,6 +1,6 @@
 from rng.rng import *
-from simulation_6 import AirportSimulation
 import pandas as pd
+from simulation_7 import AirportSimulation
 import matplotlib.pyplot as plt
 
 # Parametri della simulazione
@@ -9,9 +9,9 @@ seed_used = []  # Lista dei seed utilizzati per ogni replica della simulazione (
 
 # ---------------- INFINITE HORIZON SIMULATION ----------------
 INFINITE_HORIZON = True
-BATCH_DIM = 512                                   # Campionamento ogni 512 job (b)
+BATCH_DIM = 256                                   # Campionamento ogni 512 job (b)
 BATCH_NUM = 64                                    # Numero di batch da eseguire (k)
-INFINITE_HORIZON_TIME = BATCH_DIM * BATCH_NUM       # Lunchezza del campione
+INFINITE_HORIZON_TIME = BATCH_DIM * BATCH_NUM       # Lunghezza del campione
 
 # ---------------- FINITE HORIZON SIMULATION ----------------
 FINITE_HORIZON =        False
@@ -235,6 +235,81 @@ def infinite_horizon_run():
 
     return df
 
+    # Avvia simulazione
+    sim = AirportSimulation(
+        end_time=float('inf'),
+        sampling_rate=BATCH_DIM,
+        type_simulation="infinite",
+        batch_num=BATCH_NUM
+    )
+    metrics = sim.run()
+
+    # -------------------- Converti in DataFrame unico --------------------
+    all_data = []
+    for key in metrics.keys():
+        for snap in metrics[key]:
+            snap["pool_name"] = key  # Aggiungi info sul pool
+            all_data.append(snap)
+
+    df = pd.DataFrame(all_data)
+    df = df.sort_values(["pool_name", "time"])
+
+    # -------------------- Grafici per singolo pool --------------------
+    pool_names = df["pool_name"].unique()
+
+    for pool in pool_names:
+        df_pool = df[df["pool_name"] == pool]
+        t = df_pool["time"]
+
+        plt.figure(figsize=(12, 6))
+
+        plt.subplot(2, 2, 1)
+        plt.plot(t, df_pool["avg_utilization"], label="Utilizzazione media")
+        plt.xlabel("Tempo")
+        plt.ylabel("Utilizzazione")
+        plt.title(f"Pool: {pool} — Utilizzazione")
+        plt.grid(True)
+
+        plt.subplot(2, 2, 2)
+        plt.plot(t, df_pool["avg_waiting_time"], label="Tempo medio di attesa", color="orange")
+        plt.xlabel("Tempo")
+        plt.ylabel("Attesa (s)")
+        plt.title(f"Pool: {pool} — Tempo medio di attesa")
+        plt.grid(True)
+
+        plt.subplot(2, 2, 3)
+        plt.plot(t, df_pool["avg_response_time"], label="Tempo medio di risposta", color="green")
+        plt.xlabel("Tempo")
+        plt.ylabel("Risposta (s)")
+        plt.title(f"Pool: {pool} — Tempo medio di risposta")
+        plt.grid(True)
+
+        plt.subplot(2, 2, 4)
+        plt.plot(t, df_pool["avg_queue_population"], label="Popolazione media in coda", color="purple")
+        plt.xlabel("Tempo")
+        plt.ylabel("Lq")
+        plt.title(f"Pool: {pool} — Popolazione media in coda")
+        plt.grid(True)
+
+        plt.tight_layout()
+        plt.savefig(f"{pool}_metrics.png")
+        plt.close()
+
+    # -------------------- Grafico comparativo tra pool --------------------
+    plt.figure(figsize=(12, 6))
+    for pool in pool_names:
+        df_pool = df[df["pool_name"] == pool]
+        plt.plot(df_pool["time"], df_pool["avg_utilization"], label=pool)
+
+    plt.xlabel("Tempo")
+    plt.ylabel("Utilizzazione media")
+    plt.title("Utilizzazione media per Pool nel tempo")
+    plt.legend()
+    plt.grid(True)
+    plt.savefig("all_pools_utilization.png")
+    plt.close()
+
+    return df
 
 
 # Press the green button in the gutter to run the script.
