@@ -12,11 +12,37 @@ BATCH_NUM = 1024                                    # Numero di batch da eseguir
 INFINITE_HORIZON_TIME = BATCH_DIM * BATCH_NUM       # Lunchezza del campione
 
 # ---------------- FINITE HORIZON SIMULATION ----------------
-FINITE_HORIZON =        True
-FINITE_HORIZON_TIME =   86400.0     # una giornata completa all'aeroporto --> 00:00 - 23:59
-REPLICATION_NUM =       1           # numero di repliche eseguite
-SAMPLING_RATE =         120           # Tempo di campionamento per le statistiche
+FINITE_HORIZON =        False
+FINITE_HORIZON_TIME =   86400.0         # una giornata completa all'aeroporto --> 00:00 - 23:59
+REPLICATION_NUM =       2               # numero di repliche eseguite
+SAMPLING_RATE =         120             # Tempo di campionamento per le statistiche
 
+# ---------------- VERIFY PHASE -----------------------------
+VERIFY_PHASE =                  True
+VERIFY_HORIZON_TIME =           600000          # consideriamo un tempo sufficentemente lungo. In questo caso più di 1 settimana
+VERIFY_REPLICATION_NUM =        1               # numero di repliche eseguite
+VERIFY_SAMPLING_RATE =          120             # Tempo di campionamento per le statistiche
+
+# ---------------- GLOBAL VARS INIT ----------------
+current_horizon_time    = 0
+current_replication_num = 0
+current_sampling_rate   = 0
+current_simulation      = None
+
+def change_mode():
+    global current_horizon_time, current_replication_num, current_sampling_rate, current_simulation
+
+    if FINITE_HORIZON:
+        current_horizon_time    = FINITE_HORIZON_TIME
+        current_replication_num = REPLICATION_NUM
+        current_sampling_rate   = SAMPLING_RATE
+        current_simulation      = "finite"
+
+    elif VERIFY_PHASE:
+        current_horizon_time    = VERIFY_HORIZON_TIME
+        current_replication_num = VERIFY_REPLICATION_NUM
+        current_sampling_rate   = VERIFY_SAMPLING_RATE
+        current_simulation      = "verify"
 
 def finite_horizon_run():
     all_metrics = []
@@ -24,21 +50,22 @@ def finite_horizon_run():
     # Inizializza il primo seed
     current_seed = SEED
     seed_used.append(current_seed)
+    change_mode()
 
     # Esecuzione delle repliche
-    for index in range(REPLICATION_NUM):
+    for index in range(current_replication_num):
 
         # Contatore che tiene traccia delle repliche rimanenti
-        remaining_replica = REPLICATION_NUM - (index + 1)
+        remaining_replica = current_replication_num - (index + 1)
 
-        print(f"\n Avvio replica {index + 1}/{REPLICATION_NUM} - Seed: {get_seed()}")
+        print(f"\n Avvio replica {index + 1}/{current_replication_num} - Seed: {get_seed()}")
         plant_seeds(seed_used[index])                 # imposta il seed per la replica corrente
 
         # Crea nuova istanza della simulazione (stato pulito!)
         sim = AirportSimulation(
-            end_time=FINITE_HORIZON_TIME,
-            sampling_rate=SAMPLING_RATE,
-            type_simulation="finite"
+            end_time        =   current_horizon_time,
+            sampling_rate   =   current_sampling_rate,
+            type_simulation =   current_simulation
         )
 
         replica_metrics = sim.run()
@@ -170,13 +197,8 @@ if __name__ == '__main__':
     elif FINITE_HORIZON:
         finite_horizon_run()
 
+    elif VERIFY_PHASE:
+        finite_horizon_run()
+
     else:
         raise ValueError("Errore: Nessun orizzonte di simulazione selezionato")
-
-
-
-
-
-
-
-

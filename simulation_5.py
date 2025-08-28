@@ -22,21 +22,23 @@ class Server:
         if self.state == 1:
             self.total_busy_time += delta
 
-    def start_service(self, event, event_list, new_time=None):
+    def start_service(self, event, event_list, times):
         self.state = 1
         service_time = max(1e-3, self.service_time_generator())
-        time_to_log = new_time if new_time is not None else event.event_time
-        self.start_time = time_to_log
+        self.start_time = times.next
+        '''time_to_log = new_time if new_time is not None else event.event_time
+        self.start_time = time_to_log'''
 
         if self.debug:
-            print(f"t={time_to_log:.2f} | START | {self.name} serving {event.op_index} "
-                  f"(completion at {time_to_log + service_time:.2f})")
+            print(f"t={self.start_time:.2f} | START | {self.name} serving {event.op_index} "
+                  f"(completion at {self.start_time + service_time:.2f})")
 
         # Always push a tuple with (time, type, server, event)
-        heapq.heappush(event_list, (time_to_log + service_time, "C", self, event))
+        heapq.heappush(event_list, (self.start_time + service_time, "C", self, event))
 
-    def handle_departure(self, event, event_list, pool=None, completion_time=None):
-        completion_time = completion_time if completion_time is not None else event.event_time
+    def handle_departure(self, event, event_list, pool=None, times=None):
+        #completion_time = completion_time if completion_time is not None else event.event_time
+        completion_time = times.next
         self.completed.append(completion_time)
         self.num_in_system -= 1
         self.state = 0
@@ -48,7 +50,7 @@ class Server:
             print(f"t={completion_time:.2f} | DEPARTURE | {self.name} finished {event.op_index}")
 
         #Controlla se ci sono eventi in coda e li schedula
-        pool.start_next(event_list)
+        pool.start_next(event_list, times)
 
         # Schedule next center if defined
         next_center_name = getattr(event, "next_center", None)
@@ -75,7 +77,7 @@ class TurnstileServer(Server):
 
 class SecurityCheckServer(Server):
     def __init__(self, name):
-        super().__init__(name, lambda: lognormal(5.46694, 0.16552))
+        super().__init__(name, lambda: lognormal(4.0940, 0.0828))
 
 # -------------------- Server Pool --------------------
 class ServerPool:
@@ -84,24 +86,24 @@ class ServerPool:
         self.queue = deque()  # shared queue for all servers in this pool
         self.debug = debug
 
-    def assign_event(self, event, event_list):
+    def assign_event(self, event, event_list, times):
         free_server = next((s for s in self.servers if s.state == 0), None)
         if free_server:
-            free_server.start_service(event, event_list)
-            free_server.arrivals.append(event.event_time)
+            free_server.start_service(event, event_list, times)
+            free_server.arrivals.append(times.next)
             free_server.num_in_system += 1
         else:
             self.queue.append(event)
             if self.debug:
-                print(f"All servers busy → added to shared pool queue (length={len(self.queue)})")
+                print(f"  [QUEUEING] No free server in pool for '{event.op_index}' → queued (length={len(self.queue)})")
 
-    def start_next(self, event_list):
+    def start_next(self, event_list, times):
         while self.queue:
             free_server = next((s for s in self.servers if s.state == 0), None)
             if not free_server:
                 break
             next_event = self.queue.popleft()
-            free_server.start_service(next_event, event_list)
+            free_server.start_service(next_event, event_list, times)
             free_server.arrivals.append(next_event.event_time)
             free_server.num_in_system += 1
 
@@ -132,10 +134,9 @@ class Times:
         self.current = 0.0
         self.next = 0.0
 
-
 # -------------------- Airport Simulation --------------------
 class AirportSimulation:
-    def __init__(self, end_time, sampling_rate, type_simulation="finite", batch_num = 0):
+    def __init__(self, end_time, sampling_rate, type_simulation, batch_num = 0):
         self.end_time = end_time
         self.sampling_rate = sampling_rate
         self.batch_num = batch_num
@@ -179,33 +180,49 @@ class AirportSimulation:
 
     # -------------------- Servers & Pools --------------------
     def init_servers_and_pools(self):
-        self.server_pools = {
-            "business":                 ServerPool([ClassicCheckInServer("business_0")]),
-            "premium_economy":          ServerPool([ClassicCheckInServer("premium_economy_0")]),
-            "economy":                  ServerPool([ClassicCheckInServer(f"economy_{index}") for index in range(3)]),
-            "flexi_plus":               ServerPool([ClassicCheckInServer("flexi_plus_0")]),
-            "self_bd":                  ServerPool([BagDropCheckInServer(f"self_bd_{index}") for index in range(2)]),
-            "bd":                       ServerPool([BagDropCheckInServer(f"bd_{index}") for index in range(4)]),
-            "fast_track_turnstile":    ServerPool([TurnstileServer("fast_track_turnstile_0")]),
-            "fast_track_security_area": ServerPool([SecurityCheckServer(f"fast_track_sec_{index}") for index in range(2)]),
-            "turnstiles":               ServerPool([TurnstileServer(f"turnstile_{index}") for index in range(4)]),
-            "security_area":            ServerPool([SecurityCheckServer(f"security_{index}") for index in range(6)])
-        }
+        if self.type_simulation == "verify":
+            # Se è attiva la procedura Verify, consideriamo questa configurazione del sistema
+            self.server_pools = {
+                "business":                 ServerPool([ClassicCheckInServer("business_0")]),
+                "premium_economy":          ServerPool([ClassicCheckInServer("premium_economy_0")]),
+                "economy":                  ServerPool([ClassicCheckInServer(f"economy_{index}") for index in range(1)]),
+                "flexi_plus":               ServerPool([ClassicCheckInServer("flexi_plus_0")]),
+                "self_bd":                  ServerPool([BagDropCheckInServer(f"self_bd_{index}") for index in range(1)]),
+                "bd":                       ServerPool([BagDropCheckInServer(f"bd_{index}") for index in range(1)]),
+                "fast_track_turnstile":     ServerPool([TurnstileServer("fast_track_turnstile_0")]),
+                "fast_track_security_area": ServerPool([SecurityCheckServer(f"fast_track_sec_{index}") for index in range(1)]),
+                "turnstiles":               ServerPool([TurnstileServer(f"turnstile_{index}") for index in range(4)]),
+                "security_area":            ServerPool([SecurityCheckServer(f"security_{index}") for index in range(4)])
+            }
+
+        else:
+            self.server_pools = {
+                "business":                 ServerPool([ClassicCheckInServer("business_0")]),
+                "premium_economy":          ServerPool([ClassicCheckInServer("premium_economy_0")]),
+                "economy":                  ServerPool([ClassicCheckInServer(f"economy_{index}") for index in range(3)]),
+                "flexi_plus":               ServerPool([ClassicCheckInServer("flexi_plus_0")]),
+                "self_bd":                  ServerPool([BagDropCheckInServer(f"self_bd_{index}") for index in range(2)]),
+                "bd":                       ServerPool([BagDropCheckInServer(f"bd_{index}") for index in range(4)]),
+                "fast_track_turnstile":     ServerPool([TurnstileServer("fast_track_turnstile_0")]),
+                "fast_track_security_area": ServerPool([SecurityCheckServer(f"fast_track_sec_{index}") for index in range(2)]),
+                "turnstiles":               ServerPool([TurnstileServer(f"turnstile_{index}") for index in range(4)]),
+                "security_area":            ServerPool([SecurityCheckServer(f"security_{index}") for index in range(6)])
+            }
 
         for pool in self.server_pools.values():
             self.servers.extend(pool.servers)
 
         self.passenger_routing = {
-            "business":                 PassengerType("Business", self.server_pools["business"], next_center="fast_track_turnstile"),
-            "premium_economy":          PassengerType("PremiumEconomy", self.server_pools["premium_economy"], next_center="turnstile_area"),
-            "economy":                  PassengerType("Economy", self.server_pools["economy"], next_center="turnstile_area"),
-            "flexi_plus":               PassengerType("FlexiPlus", self.server_pools["flexi_plus"], next_center="fast_track_turnstile"),
-            "self_bd":                  PassengerType("SelfBD", self.server_pools["self_bd"], next_center="turnstile_area"),
-            "bd":                       PassengerType("BD", self.server_pools["bd"], next_center="turnstile_area"),
-            "fast_track_turnstile":     PassengerType("FastTrackTurnstile", self.server_pools["fast_track_turnstile"], next_center="fast_track_security_area"),
-            "fast_track_security_area": PassengerType("FastTrackSecurity", self.server_pools["fast_track_security_area"]),
-            "turnstile":                PassengerType("Turnstile", self.server_pools["turnstiles"], next_center="security_area"),
-            "security_area":            PassengerType("Security", self.server_pools["security_area"])
+            "business":                 PassengerType("Business",           self.server_pools["business"],              next_center="fast_track_turnstile"),
+            "premium_economy":          PassengerType("PremiumEconomy",     self.server_pools["premium_economy"],       next_center="turnstile_area"),
+            "economy":                  PassengerType("Economy",            self.server_pools["economy"],               next_center="turnstile_area"),
+            "flexi_plus":               PassengerType("FlexiPlus",          self.server_pools["flexi_plus"],            next_center="fast_track_turnstile"),
+            "self_bd":                  PassengerType("SelfBD",             self.server_pools["self_bd"],               next_center="turnstile_area"),
+            "bd":                       PassengerType("BD",                 self.server_pools["bd"],                    next_center="turnstile_area"),
+            "fast_track_turnstile":     PassengerType("FastTrackTurnstile", self.server_pools["fast_track_turnstile"],  next_center="fast_track_security_area"),
+            "fast_track_security_area": PassengerType("FastTrackSecurity",  self.server_pools["fast_track_security_area"]),
+            "turnstile":                PassengerType("Turnstile",          self.server_pools["turnstiles"],            next_center="security_area"),
+            "security_area":            PassengerType("Security",           self.server_pools["security_area"])
         }
 
     # -------------------- Interarrival --------------------
@@ -233,9 +250,16 @@ class AirportSimulation:
             "late_evening":     0.078
         }
 
-        slot_multiplier = {k: v / 0.14 for k, v in percent.items()}
+        multiplier = None
 
-        multiplier = slot_multiplier.get(self.current_slot)
+        if self.type_simulation == "verify":
+            slot_multiplier = {k: v / 1 for k, v in percent.items()}
+            multiplier = slot_multiplier.get("late_afternoon")
+
+        elif self.type_simulation == "finite" or self.type_simulation == "infinite":
+            slot_multiplier = {k: v / 0.14 for k, v in percent.items()}
+            multiplier = slot_multiplier.get(self.current_slot)
+
         lambda_rescaled = lambdas[op_index] * multiplier
         return exponential(1 / lambda_rescaled)
 
@@ -271,12 +295,12 @@ class AirportSimulation:
                 event.op_index = "turnstile"
 
             print(f"  [ROUTING] {op} passenger → {fast_track_or_no} priority")
-            pool.assign_event(event, self.event_list)
+            pool.assign_event(event, self.event_list, self.times)
             return
 
         ptype = self.passenger_routing[op]
         pool = ptype.server_pool
-        pool.assign_event(event, self.event_list)
+        pool.assign_event(event, self.event_list, self.times)
 
         if ptype.next_center:
             event.next_center = ptype.next_center
@@ -343,23 +367,23 @@ class AirportSimulation:
         item = heapq.heappop(self.event_list)
 
         if len(item) == 3:
-            time, event_type, event = item
+            time_event, event_type, event = item
             server = None
         else:
-            time, event_type, server, event = item
+            time_event, event_type, server, event = item
 
-        self.times.next = time
+        self.times.next = time_event
 
         if event_type in ["A", "E"]:
             self.process_arrival(event)
         elif event_type == "C" and server is not None:
             ptype = self.passenger_routing.get(event.op_index)
             pool = ptype.server_pool if ptype else None
-            server.handle_departure(event, self.event_list, pool=pool, completion_time=self.times.next)
-            if ptype.name == "Security" or ptype.name == "FastTrackSecurity":
+            server.handle_departure(event, self.event_list, pool=pool, times=self.times)
+            if ptype and ptype.name == "Security" or ptype.name == "FastTrackSecurity":
                 self.completed_jobs += 1
         elif event_type == "H":
-            self.update_current_slot(time)
+            self.update_current_slot(time_event)
             print(f"t={self.times.next:.2f} | TIME SLOT CHANGE → {self.current_slot}")
 
         if event and self.times.next >= getattr(self, "next_sampling", 0):
@@ -418,6 +442,13 @@ class AirportSimulation:
                 event_type, event = self.process_next_event()
                 if event and getattr(event, "exogenous", False):
                     self.generate_exogenous_arrival()
+
+        elif self.type_simulation == "verify":
+            while self.event_list and self.times.next <= self.end_time:
+                event_type, event = self.process_next_event()
+                if event and getattr(event, "exogenous", False):
+                    self.generate_exogenous_arrival()
+
         else :
             while self.processed_batch < self.batch_num:
                 #if VERBOSE: print_status()
