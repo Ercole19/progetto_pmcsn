@@ -3,19 +3,20 @@ from computeBatchAnalysis import *
 from progetto_pmcsn.rng.rng import *
 
 # === Parametri iniziali "di esplorazione" ===
-SAMPLING_RATE = 64          # Ogni quanti job si campiona (b provvisorio)
-BATCH_NUM = 2048             # Numero di batch provvisori (deve essere alto)
+SAMPLING_RATE = 256          # Ogni quanti job si campiona (b provvisorio)
+BATCH_NUM = 8192             # Numero di batch provvisori (deve essere alto)
 SEED = 123456789
 
-def extract_metric(metrics, center_name, metric_name):
-    data = [
-        batch[metric_name]
-        for batch in metrics.get(center_name, [])
-        if isinstance(batch, dict)
-           and metric_name in batch
-           and batch[metric_name] is not None
-    ]
-    return data
+def extract_all_metrics(metrics, metric_names):
+    data_dict = {metric: [] for metric in metric_names}
+    for metric_name in metric_names:
+        for center_name, center_batches in metrics.items():
+            for batch in center_batches:
+                if isinstance(batch, dict) and metric_name in batch and batch[metric_name] is not None:
+                    data_dict[metric_name].append(batch[metric_name])
+    return data_dict
+
+
 
 if __name__ == '__main__':
 
@@ -33,17 +34,21 @@ if __name__ == '__main__':
     metrics = sim.run()
     print("Simulazione completata.")
 
-    # === Estrai i dati della metrica da analizzare ===
-    # Puoi scegliere: avg_response_time, avg_utilization, avg_waiting_time...
-    data = extract_metric(metrics, "security_area", "avg_utilization")
+    metrics_to_analyze = [
+        "avg_utilization",
+        "avg_waiting_time",
+        "avg_response_time",
+        "avg_queue_population",
+        "avg_system_population"
+    ]
 
-    # === Stima migliore configurazione (b, k) ===
-    suggested = test_batch_configurations(data, max_autocorrelation=0.1)
+    data_dict = extract_all_metrics(metrics, metrics_to_analyze)
+    suggested = test_batch_configurations_multiple_metrics(data_dict)
 
     # === Visualizza suggerimenti finali ===
     if suggested:
-        print(f"➡️  Imposta nella simulazione: BATCH_DIM = {suggested['b']}, BATCH_NUM = {suggested['k']}")
+        print(f" -->  Imposta nella simulazione: BATCH_DIM = {suggested['b']}, BATCH_NUM = {suggested['k']}")
     else:
-        print("❌ Nessuna configurazione suggerita. Prova ad aumentare il numero di batch iniziali.")
+        print(" Nessuna configurazione suggerita. Prova ad aumentare il numero di batch iniziali.")
 
 

@@ -47,56 +47,79 @@ def autocorrelation_lag1(data):
     den = sum((x - mu) ** 2 for x in data)
     return num / den if den != 0 else 0.0
 
-# --- Test di configurazioni b e k ---
-def test_batch_configurations(
-    data,
-    b_candidates=[64, 128, 256, 512, 1024],
-    k_min=10,
-    max_autocorrelation=0.1,
+def test_batch_configurations_multiple_metrics(
+    data_dict,
+    b_candidates=[64, 128, 256, 512, 1024, 2048, 4096],
+    k_min=5,
+    acf_weight=1.0,
+    ci_weight=1.0,
+    penalty_factor=10.0,
     verbose=True
 ):
-    total = len(data)
-    if verbose:
-        print(f"\nAnalisi configurazioni (b, k) per {total} dati raccolti\n")
-    best_config = None
     valid_configs = []
+
+    total = len(next(iter(data_dict.values())))  # assume tutte le metriche hanno stessa lunghezza
 
     for b in b_candidates:
         if total % b != 0:
-            if verbose:
-                print(f"[b={b:4}] Ignorato perché {total} non è multiplo di {b}")
-            continue
+            continue  # salta i b non divisori
+
         k = total // b
         if k < k_min:
-            if verbose:
-                print(f"[b={b:4}, k={k:3}] Ignorato perché k < {k_min}")
-            continue
-        batches = [data[i * b:(i + 1) * b] for i in range(k)]
-        batch_means = [mean(batch) for batch in batches]
+            continue  # ignora k troppo piccoli
 
-        m, ci_low, ci_high = confidence_interval(batch_means)
-        acf1 = autocorrelation_lag1(batch_means)
+        config_metrics = {}
+        total_score = 0.0
+        valid = True
 
+        for metric_name, data in data_dict.items():
+            batches = [data[i * b:(i + 1) * b] for i in range(k)]
+            batch_means = [mean(batch) for batch in batches]
+
+            m, ci_low, ci_high = confidence_interval(batch_means)
+            acf1 = autocorrelation_lag1(batch_means)
+
+            if ci_low is None or ci_high is None:
+                valid = False
+                break
+
+            ci_range = ci_high - ci_low
+            raw_score = acf_weight * abs(acf1) + ci_weight * ci_range
+            penalty = 1 + (penalty_factor / k)
+            metric_score = raw_score * penalty
+            total_score += metric_score
+
+            config_metrics[metric_name] = {
+                "mean": m,
+                "ci_low": ci_low,
+                "ci_high": ci_high,
+                "acf1": acf1,
+                "score": metric_score
+            }
+
+        if valid:
+            avg_score = total_score / len(data_dict)
+            valid_configs.append({
+                "b": b,
+                "k": k,
+                "score": avg_score,
+                "metrics": config_metrics
+            })
+
+    if not valid_configs:
         if verbose:
-            print(f"[b={b:4}, k={k:3}]  μ={m:.4f}  CI=({ci_low if ci_low else 'N/A'}, {ci_high if ci_high else 'N/A'})  ρ₁={acf1:.4f}")
+            print("❌ Nessuna configurazione valida trovata.")
+        return None
 
-            # Mostra i primi batch per debug
-            print("   Primi 5 batch means:", ["{:.4f}".format(x) for x in batch_means[:5]])
+    best_config = min(valid_configs, key=lambda x: x["score"])
 
-        valid_configs.append({"b": b, "k": k, "acf1": acf1, "mean": m, "ci_low": ci_low, "ci_high": ci_high})
+    if verbose:
+        print("\n✅ Configurazione ottimale trovata:")
+        print(f"   b = {best_config['b']}, k = {best_config['k']}, score medio = {best_config['score']:.6f}")
+        for name, stats in best_config["metrics"].items():
+            print(f"   ➤ {name:22s} ρ₁ = {stats['acf1']:.4f}  CI = ({stats['ci_low']:.4f}, {stats['ci_high']:.4f})  score = {stats['score']:.6f}")
 
-        if abs(acf1) < max_autocorrelation and best_config is None:
-            best_config = {"b": b, "k": k, "acf1": acf1}
-
-    if best_config is None and valid_configs:
-        # Nessuna con autocorrelazione accettabile → prendi quella con autocorrelazione minore in valore assoluto
-        best_config = min(valid_configs, key=lambda x: abs(x["acf1"]))
-
-    if best_config:
-        if verbose:
-            print(f"\n✅ Configurazione suggerita: b={best_config['b']}, k={best_config['k']} (ρ₁={best_config['acf1']:.4f})\n")
-    else:
-        if verbose:
-            print("\n⚠️ Nessuna configurazione trovata con autocorrelazione accettabile. Riprova con dati più lunghi.\n")
-
-    return best_config
+    return {
+        "b": best_config["b"],
+        "k": best_config["k"]
+    }
