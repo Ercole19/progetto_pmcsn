@@ -2,8 +2,9 @@ import heapq
 from collections import deque
 from distributions.distributions import exponential, lognormal
 from params import *
-from rng.rng import *
-from rng.computeBatchMeans import *
+from libs.rng import *
+from utils.computeBatchMeans import *
+from utils.utils import truncate_lognormal
 
 # -------------------- Server --------------------
 class Server:
@@ -19,6 +20,7 @@ class Server:
         self.num_in_system = 0
         self.total_busy_time = 0.0
         self.debug = debug
+        self.last_event_time = 0.0   # 🔑 traccia l'ultimo istante in cui ho aggiornato il busy time
 
     def reset_server(self):
         self.state = 0
@@ -29,9 +31,19 @@ class Server:
         self.start_time = 0.0
         self.queue_waits = []
         self.response_times = []
+        self.last_event_time = 0.0
+
+    def update_busy_time(self, current_time):
+        """Aggiorna il busy time fino al current_time"""
+        if self.state == 1:  # se era occupato fino ad ora
+            self.total_busy_time += current_time - self.last_event_time
+        self.last_event_time = current_time
 
     def start_service(self, event, event_list, times, queue_time=0):
+        # 🔑 aggiorna busy time prima di cambiare stato
+        self.update_busy_time(times.next)
         self.state = 1
+
         service_time = max(1e-3, self.service_time_generator())
         self.start_time = times.next
         event.start_service_time = self.start_time
@@ -47,20 +59,24 @@ class Server:
 
     def handle_departure(self, event, event_list, pool=None, times=None):
         completion_time = times.next
+
+        # 🔑 aggiorna busy time prima di liberare il server
+        self.update_busy_time(completion_time)
+
         self.completed.append(completion_time)
         self.num_in_system -= 1
         self.state = 0
-
-        # 🔑 aggiorna busy time qui
-        service_duration = completion_time - event.start_service_time
-        self.total_busy_time += service_duration
 
         self.response_times.append(event.queue_time + event.service_time)
 
         if self.debug:
             print(f"t={completion_time:.2f} | DEPARTURE | {self.name} finished {event.op_index}")
 
-        pool.start_next(event_list, times)
+        if isinstance(pool, TurnstilePool):
+            # this is a turnstile pool
+            pool.start_next(self, event_list, times)
+        else:
+            pool.start_next(event_list, times)
 
         next_center_name = getattr(event, "next_center", None)
         if next_center_name is not None:
@@ -68,7 +84,10 @@ class Server:
             heapq.heappush(event_list, (new_event.event_time, "A", new_event))
 
     def utilization(self, current_time):
+        # 🔑 prima di calcolare, aggiorna il busy time fino a current_time
+        self.update_busy_time(current_time)
         return self.total_busy_time / max(1e-9, current_time)
+
 
     def avg_wait_time(self):
         queue_total = sum(qt for qt in self.queue_waits)
@@ -95,10 +114,31 @@ class BagDropCheckInServer(Server):
 class TurnstileServer(Server):
     def __init__(self, name):
         super().__init__(name, lambda: 3)
+        self.queue = deque()
 
 class SecurityCheckServer(Server):
     def __init__(self, name):
         super().__init__(name, lambda: exponential(60))
+
+"""class ClassicCheckInServer(Server):
+    def __init__(self, name):
+        super().__init__(name,
+            lambda: truncate_lognormal(5.1895, 0.08319, 30, 300))  # 30 s - 5 min
+
+class BagDropCheckInServer(Server):
+    def __init__(self, name):
+        super().__init__(name,
+            lambda: truncate_lognormal(4.064, 0.246, 20, 180))  # 20 s - 3 min
+
+class TurnstileServer(Server):
+    def __init__(self, name):
+        super().__init__(name, lambda: 3)  # costante
+
+class SecurityCheckServer(Server):
+    def __init__(self, name):
+        super().__init__(name,
+            lambda: truncate_lognormal(4.09, 0.091, 30, 600))  # 30 s - 10 min"""
+
 
 
 # -------------------- Server Pool --------------------
@@ -149,6 +189,54 @@ class ServerPool:
         return sum(s.utilization(current_time) for s in self.servers) / len(self.servers)
 
 
+
+
+
+class TurnstilePool:
+    def __init__(self, servers, debug=True):
+        self.servers = servers
+        self.debug = debug
+
+    def reset_pool(self):
+        for s in self.servers:
+            s.reset_server()
+            s.queue.clear()
+
+    def assign_event(self, event, event_list, times):
+        # 1. Controlla se c’è un tornello libero
+        for s in self.servers:
+            if s.state == 0:
+                event.arrival_time = times.next
+                s.start_service(event, event_list, times)
+                s.arrivals.append(times.next)
+                s.num_in_system += 1
+                return
+
+        # 2. Tutti occupati → scegli quello con la coda più corta
+        chosen = min(self.servers, key=lambda s: len(s.queue))
+        event.arrival_time = times.next
+        chosen.queue.append(event)
+        if self.debug:
+            print(f"  [QUEUEING] '{event.op_index}' → {chosen.name} (queue len={len(chosen.queue)})")
+
+    def start_next(self, server, event_list, times):
+        """Chiamato quando un tornello finisce il servizio"""
+        if server.queue:
+            next_event = server.queue.popleft()
+            queue_time = times.next - next_event.arrival_time
+            server.start_service(next_event, event_list, times, queue_time)
+            next_event.event_time = times.next
+            server.arrivals.append(next_event.event_time)
+            server.num_in_system += 1
+
+    def total_in_system(self):
+        return sum(s.num_in_system + len(s.queue) for s in self.servers)
+
+    def avg_utilization(self, current_time):
+        return sum(s.utilization(current_time) for s in self.servers) / len(self.servers)
+
+
+
 # -------------------- Passenger & Event --------------------
 class PassengerType:
     def __init__(self, name, server_pool, next_center=None):
@@ -196,7 +284,12 @@ class AirportSimulation:
             "bd": [],
             "fast_track_turnstile": [],
             "fast_track_security_area": [],
-            "turnstiles": [],
+            "turnstiles": {
+                "turnstile_0": [],
+                "turnstile_1": [],
+                "turnstile_2": [],
+                "turnstile_3": [],
+            },
             "security_area": [],
         }
         self.last_arrival_time = {}
@@ -217,7 +310,7 @@ class AirportSimulation:
             "flexi_plus": LAMBDA_FP,
             "self_bd": LAMBDA_SBD,
             "bd": LAMBDA_BD,
-            "turnstile_area": LAMBDA_4,
+            "turnstile_area": LAMBDA_BM_TOT,
             "exogenous": LAMBDA_E,
             "fast_track_turnstile": LAMBDA_6,
             "security_area": LAMBDA_7,
@@ -272,7 +365,7 @@ class AirportSimulation:
                 "bd":                       ServerPool([BagDropCheckInServer(f"bd_{index}") for index in range(1)]),
                 "fast_track_turnstile":     ServerPool([TurnstileServer("fast_track_turnstile_0")]),
                 "fast_track_security_area": ServerPool([SecurityCheckServer(f"fast_track_sec_{index}") for index in range(1)]),
-                "turnstiles":               ServerPool([TurnstileServer(f"turnstile_{index}") for index in range(4)]),
+                "turnstiles":               TurnstilePool([TurnstileServer(f"turnstile_{index}") for index in range(4)]),
                 "security_area":            ServerPool([SecurityCheckServer(f"security_{index}") for index in range(2)])
             }
 
@@ -366,27 +459,6 @@ class AirportSimulation:
 
     # -------------------- Generate new arrivals --------------------
     def generate_new_arrival(self, op_index=None):
-        if op_index is None:
-            select_stream(0)
-            airline_type = "traditional" if random() < 0.2 else "lowcost"
-            if airline_type == "traditional":
-                select_stream(1)
-                r = random()
-                if r < 0.1: op_index = "business"
-                elif r < 0.3: op_index = "premium_economy"
-                elif r < 0.75: op_index = "economy"
-                else: op_index = "turnstile_area"
-            else:
-                select_stream(2)
-                r = random()
-                if r < 0.7: op_index = "turnstile_area"
-                else:
-                    select_stream(3)
-                    r2 = random()
-                    if r2 < 0.05: op_index = "flexi_plus"
-                    elif r2 < 0.15: op_index = "self_bd"
-                    else: op_index = "bd"
-
         select_stream({
             "business": 10, "premium_economy": 11, "economy": 12,
             "flexi_plus": 13, "self_bd": 14, "bd": 15,
@@ -465,6 +537,7 @@ class AirportSimulation:
 
             for s in pool.servers:
                 queue_total += s.avg_wait_time()
+                response_to_add = s.avg_response_time
                 response_total += s.avg_response_time()
 
             avg_queue = queue_total / len(pool.servers)
@@ -495,59 +568,103 @@ class AirportSimulation:
         """
         Raccoglie snapshot e metriche aggregate per ogni pool.
         Deve essere chiamato periodicamente (a ogni evento o step).
+        Raccoglie metriche per singolo tornello se il pool è 'turnstiles'.
         """
         current_time = self.times.next
 
+
         for pool_name, pool in self.server_pools.items():
-            queue_total = 0
-            response_total = 0
 
-            for s in pool.servers:
-                queue_total += s.avg_wait_time()
-                response_total += s.avg_response_time()
+            # --- Scaling arrivi ---
+            slot_multiplier = {k: v / 1 for k, v in self.percent.items()}
+            multiplier = slot_multiplier.get("night")
 
-            avg_queue = queue_total / len(pool.servers)
-            avg_resp = response_total / len(pool.servers)
-
-            if self.type_simulation == "verify":
-                slot_multiplier = {k: v / 1 for k, v in self.percent.items()}
-                multiplier = slot_multiplier.get("late_afternoon")
-
+            if pool_name in ("turnstiles", "fast_track_turnstile"):
+                lambda_rescaled = self.lambdas["turnstile_area"] * multiplier
             else:
-                slot_multiplier = {k: v / 1 for k, v in self.percent.items()}
-                multiplier = slot_multiplier.get("night")
+                lambda_rescaled = self.lambdas[pool_name] * multiplier
 
-            if pool_name == "turnstiles" or pool_name == "fast_track_turnstile":
-                lambda_to_choose = "turnstile_area"
-                lambda_rescaled = self.lambdas[lambda_to_choose] * multiplier
-            else : lambda_rescaled = self.lambdas[pool_name] * multiplier
+            # ------------------- Metrics per server (solo tornelli) -------------------
+            if pool_name == "turnstiles":
+                for s in pool.servers:
+                    completed = len(s.completed)
+                    if completed > 0:
+                        avg_queue_s = s.avg_wait_time()
+                        avg_service_s = (s.total_busy_time / completed) if completed > 0 else 0.0
+                        avg_resp_s = avg_queue_s + avg_service_s
+                        snapshot_s = {
+                            "time": current_time,
+                            "queue_length": len(s.queue),
+                            "in_system": s.num_in_system,
+                            "avg_utilization": s.utilization(current_time),
+                            "avg_waiting_time": avg_queue_s,
+                            "avg_response_time": avg_resp_s,
+                            "avg_queue_population": lambda_rescaled * avg_queue_s,
+                            "avg_system_population": lambda_rescaled * avg_resp_s,
+                        }
+                        self.metrics[pool_name][s.name].append(snapshot_s)
+
+                        print(
+                            f"  [SERVER METRICS] t={current_time:.2f} "
+                            f"Server={s.name} "
+                            f"InSystem={snapshot_s['in_system']} "
+                            f"Util={snapshot_s['avg_utilization']:.2f} "
+                            f"Wait={snapshot_s['avg_waiting_time']:.2f} "
+                            f"Resp={snapshot_s['avg_response_time']:.2f} "
+                           f"Avg_queue_population={snapshot_s['avg_queue_population']:.2f} "
+                            f"Avg_system_population={snapshot_s['avg_system_population']:.2f}"
+                        )
+            else :
+                # ------------------- Pool metrics -------------------
+                queue_total = 0.0
+                service_total = 0.0
+                total_completed = 0
+
+                for s in pool.servers:
+                    completed = len(s.completed)
+                    total_completed += completed
+                    queue_total += s.avg_wait_time()
+                    service_total += (s.total_busy_time / completed) if completed > 0 else 0.0
+
+                if total_completed > 0:
+
+                    avg_queue = queue_total
+                    avg_service = service_total / len(pool.servers) if len(pool.servers) > 0 else 0
+                    avg_resp = avg_queue + avg_service
 
 
-            snapshot = {
-                "time": current_time,
-                "queue_length": len(pool.queue),
-                "in_system": pool.total_in_system(),
-                "avg_utilization": pool.avg_utilization(current_time),
-                "avg_waiting_time": avg_queue,
-                "avg_response_time": avg_resp,
-                "avg_queue_population": lambda_rescaled * avg_queue,
-                "avg_system_population": lambda_rescaled * avg_resp,
-            }
+                    # --- Lunghezza coda ---
+                    if pool_name == "turnstiles":
+                        queue_len = sum(len(s.queue) for s in pool.servers)
+                    else:
+                        queue_len = len(pool.queue)
 
-            self.metrics[pool_name].append(snapshot)
+                    # --- Snapshot pool ---
+                    snapshot = {
+                        "time": current_time,
+                        "queue_length": queue_len,
+                        "in_system": pool.total_in_system(),
+                        "avg_utilization": pool.avg_utilization(current_time),
+                        "avg_waiting_time": avg_queue,
+                        "avg_response_time": avg_resp,
+                        "avg_queue_population": lambda_rescaled * avg_queue,
+                        "avg_system_population": lambda_rescaled * avg_resp,
+                    }
+
+                    self.metrics[pool_name].append(snapshot)
+
+                    print(
+                        f"[METRICS] t={current_time:.2f} "
+                        f"Pool={pool_name} "
+                        f"InSystem={snapshot['in_system']} "
+                        f"Util={snapshot['avg_utilization']:.2f} "
+                        f"Wait={snapshot['avg_waiting_time']:.2f} "
+                        f"Resp={snapshot['avg_response_time']:.2f} "
+                        f"Avg_queue_population={snapshot['avg_queue_population']:.2f} "
+                        f"Avg_system_population={snapshot['avg_system_population']:.2f}"
+                    )
 
 
-            print(
-                f'[METRICS] t={current_time:.2f} '
-                f'Pool={pool_name} '
-                f'Queue_len={snapshot['queue_length']} '
-                f'InSystem={snapshot['in_system']} '
-                f'Util={snapshot['avg_utilization']:.2f} '
-                f'Wait={snapshot['avg_waiting_time']:.2f} '
-                f'Resp={snapshot['avg_response_time']:.2f}'
-                f'Avg_queue_population={snapshot['avg_queue_population']:.2f} '
-                f'Avg_system_population={snapshot['avg_system_population']:.2f} '
-                )
 
     # -------------------- Run --------------------
     def run(self):
@@ -600,7 +717,17 @@ class AirportSimulation:
                                      "turnstile_area"]:
                         self.generate_new_arrival(op_index)
                     self.generate_exogenous_arrival()
-            for key in self.metrics.keys():
-                print(f"Computing area {key}")
-                compute_batch_means_cis(self.metrics[key])
+            for key, value in self.metrics.items():
+                print(f"\nComputing area {key}")
+
+                # Se è un pool "normale" (lista di snapshot)
+                if isinstance(value, list):
+                    compute_batch_means_cis(value)
+
+                # Se è un pool con server separati (es. turnstiles)
+                elif isinstance(value, dict):
+                    for server_name, server_metrics in value.items():
+                        print(f"  Server: {server_name}")
+                        compute_batch_means_cis(server_metrics)
+
         return self.metrics
