@@ -103,7 +103,7 @@ class Server:
             return 0
 
 # -------------------- Specialized Servers --------------------
-class ClassicCheckInServer(Server):
+"""class ClassicCheckInServer(Server):
     def __init__(self, name):
         super().__init__(name, lambda: exponential(180))
 
@@ -118,9 +118,9 @@ class TurnstileServer(Server):
 
 class SecurityCheckServer(Server):
     def __init__(self, name):
-        super().__init__(name, lambda: exponential(60))
+        super().__init__(name, lambda: exponential(60))"""
 
-"""class ClassicCheckInServer(Server):
+class ClassicCheckInServer(Server):
     def __init__(self, name):
         super().__init__(name,
             lambda: truncate_lognormal(5.1895, 0.08319, 30, 300))  # 30 s - 5 min
@@ -133,11 +133,12 @@ class BagDropCheckInServer(Server):
 class TurnstileServer(Server):
     def __init__(self, name):
         super().__init__(name, lambda: 3)  # costante
+        self.queue = deque()
 
 class SecurityCheckServer(Server):
     def __init__(self, name):
         super().__init__(name,
-            lambda: truncate_lognormal(4.09, 0.091, 30, 600))  # 30 s - 10 min"""
+            lambda: truncate_lognormal(4.09, 0.091, 30, 300))  # 30 s - 5 min
 
 
 
@@ -379,7 +380,7 @@ class AirportSimulation:
                 "bd":                       ServerPool([BagDropCheckInServer(f"bd_{index}") for index in range(4)]),
                 "fast_track_turnstile":     ServerPool([TurnstileServer("fast_track_turnstile_0")]),
                 "fast_track_security_area": ServerPool([SecurityCheckServer(f"fast_track_sec_{index}") for index in range(2)]),
-                "turnstiles":               ServerPool([TurnstileServer(f"turnstile_{index}") for index in range(4)]),
+                "turnstiles":               TurnstilePool([TurnstileServer(f"turnstile_{index}") for index in range(4)]),
                 "security_area":            ServerPool([SecurityCheckServer(f"security_{index}") for index in range(6)])
             }
 
@@ -404,11 +405,11 @@ class AirportSimulation:
 
         multiplier = None
 
-        if self.type_simulation == "verify":
-            slot_multiplier = {k: v / 1 for k, v in self.percent.items()}
-            multiplier = slot_multiplier.get("late_afternoon")
+        if self.type_simulation == "finite":
+            slot_multiplier = {k: v / 0.14 for k, v in self.percent.items()}
+            multiplier = slot_multiplier.get(self.current_slot)
 
-        elif self.type_simulation == "finite" or self.type_simulation == "infinite":
+        elif  self.type_simulation == "infinite":
             slot_multiplier = {k: v / 1 for k, v in self.percent.items()}
             multiplier = slot_multiplier.get("night")
 
@@ -526,46 +527,6 @@ class AirportSimulation:
     # -------------------- Metrics --------------------
     def collect_metrics(self):
         """
-        Raccoglie snapshot e metriche aggregate per ogni pool (caso finito).
-        Deve essere chiamato periodicamente durante la simulazione a tempo finito.
-        """
-        current_time = self.times.next
-
-        for pool_name, pool in self.server_pools.items():
-            queue_total = 0
-            response_total = 0
-
-            for s in pool.servers:
-                queue_total += s.avg_wait_time()
-                response_to_add = s.avg_response_time
-                response_total += s.avg_response_time()
-
-            avg_queue = queue_total / len(pool.servers)
-            avg_resp = response_total / len(pool.servers)
-
-            snapshot = {
-                "time": current_time,
-                "queue_length": len(pool.queue),
-                "in_system": pool.total_in_system(),
-                "avg_utilization": pool.avg_utilization(current_time),
-                "avg_waiting_time": avg_queue,
-                "avg_response_time": avg_resp,
-            }
-
-            self.metrics[pool_name].append(snapshot)
-
-            print(
-                f'[METRICS-FINITE] t={current_time:.2f} '
-                f'Pool={pool_name} '
-                f'Queue_len={snapshot["queue_length"]} '
-                f'InSystem={snapshot["in_system"]} '
-                f'Util={snapshot["avg_utilization"]:.2f} '
-                f'Wait={snapshot["avg_waiting_time"]:.2f} '
-                f'Resp={snapshot["avg_response_time"]:.2f}'
-            )
-
-    def collect_metrics_infinite(self):
-        """
         Raccoglie snapshot e metriche aggregate per ogni pool.
         Deve essere chiamato periodicamente (a ogni evento o step).
         Raccoglie metriche per singolo tornello se il pool è 'turnstiles'.
@@ -576,8 +537,14 @@ class AirportSimulation:
         for pool_name, pool in self.server_pools.items():
 
             # --- Scaling arrivi ---
-            slot_multiplier = {k: v / 1 for k, v in self.percent.items()}
-            multiplier = slot_multiplier.get("night")
+
+            if self.type_simulation == "finite":
+                slot_multiplier = {k: v / 0.14 for k, v in self.percent.items()}
+                multiplier = slot_multiplier.get(self.current_slot)
+
+            else :
+                slot_multiplier = {k: v / 1 for k, v in self.percent.items()}
+                multiplier = slot_multiplier.get("night")
 
             if pool_name in ("turnstiles", "fast_track_turnstile"):
                 lambda_rescaled = self.lambdas["turnstile_area"] * multiplier
@@ -649,6 +616,7 @@ class AirportSimulation:
                         "avg_response_time": avg_resp,
                         "avg_queue_population": lambda_rescaled * avg_queue,
                         "avg_system_population": lambda_rescaled * avg_resp,
+                        "passengers_completed": self.completed_jobs,
                     }
 
                     self.metrics[pool_name].append(snapshot)
@@ -687,12 +655,6 @@ class AirportSimulation:
                 if event and getattr(event, "exogenous", False):
                     self.generate_exogenous_arrival()
 
-        elif self.type_simulation == "verify":
-            while self.event_list and self.times.next <= self.end_time:
-                event_type, event = self.process_next_event()
-                if event and getattr(event, "exogenous", False):
-                    self.generate_exogenous_arrival()
-
         else :
             while self.processed_batch < self.batch_num:
                 #if VERBOSE: print_status()
@@ -701,7 +663,7 @@ class AirportSimulation:
                     self.generate_exogenous_arrival()
 
                 if self.completed_jobs == self.sampling_rate and self.completed_jobs != 0:
-                    self.collect_metrics_infinite()
+                    self.collect_metrics()
                     self.processed_batch += 1
                     #self.next_sampling = self.completed_jobs + self.sampling_rate
                     print(f"Batch {self.processed_batch}/{self.batch_num}")
