@@ -1,4 +1,5 @@
-from rvgs.rvgs import *
+from libs.rvgs import *
+from libs.rvms import *
 
 def format_queues(queues):
     """
@@ -15,7 +16,7 @@ def format_queues(queues):
 
 
 
-def truncate_lognormal(mu, sigma, inf):
+def truncate_lognormal(mu, sigma, inf, sup):
     """
     Tronca la distribuzione lognormale tra inf e sup.
     Utilizza le funzioni cdfLognormal e idfLognormal.
@@ -29,8 +30,10 @@ def truncate_lognormal(mu, sigma, inf):
     # Calcola la CDF della lognormale a inf e sup
     alpha = cdfLognormal(mu, sigma, inf)
 
+    beta = cdfLognormal(mu, sigma, sup)
+
     # Genera un valore uniforme tra alpha e beta
-    u = Uniform(alpha, 1)
+    u = Uniform(alpha, beta)
 
     # Inversa della CDF (quantile) per ottenere il valore lognormale troncato
     return idfLognormal(mu, sigma, u)

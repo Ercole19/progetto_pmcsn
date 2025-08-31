@@ -150,7 +150,7 @@ LAMBDA_A = GAMMA * 0.6          # Tasso medio complessivo degli arrivi alla zona
 LAMBDA_E = GAMMA * 0.4          # Tasso medio complessivo degli arrivi che usufruiscono della zona Check-In B e C
 
 # -------------------- Check-In tradizionale --------------
-LAMBDA_T    = LAMBDA_A * P_T
+LAMBDA_T    = LAMBDA_A * P_T        #0.041004
 LAMBDA_BC   = LAMBDA_T * P_T_B      # Tasso medio d'arrivo al centro Business-Class
 LAMBDA_PE   = LAMBDA_T * P_T_PE     # Tasso medio d'arrivo al centro Premium-Economy
 LAMBDA_ECO  = LAMBDA_T * P_T_E      # Tasso medio d'arrivo al centro Economy
@@ -164,6 +164,8 @@ LAMBDA_FP       = (LAMBDA_LC * P_L_NOB) * P_L_FP        # Tasso medio d'arrivo a
 LAMBDA_SBD      = (LAMBDA_LC * P_L_NOB) * P_L_SB_e_D    # Tasso medio d'arrivo al centro Self Bag and Drop
 LAMBDA_BD       = (LAMBDA_LC * P_L_NOB)  * P_L_B_e_D    # Tasso medio d'arrivo al centro Bag and Drop
 LAMBDA_BM_LC    = LAMBDA_LC * P_L_OB                    # Tasso medio d'arrivo per Bagaglio a Mano
+
+LAMBDA_BM_TOT = LAMBDA_BM + LAMBDA_BM_LC
 
 LAMBDA_3 = LAMBDA_SBD + LAMBDA_BD + LAMBDA_BM_LC
 

@@ -1,6 +1,8 @@
-from rng.rng import *
+import os
+
+from libs.rng import *
 import pandas as pd
-from simulation_7 import AirportSimulation
+from simulation import AirportSimulation
 import matplotlib.pyplot as plt
 
 # Parametri della simulazione
@@ -9,8 +11,8 @@ seed_used = []  # Lista dei seed utilizzati per ogni replica della simulazione (
 
 # ---------------- INFINITE HORIZON SIMULATION ----------------
 INFINITE_HORIZON = True
-BATCH_DIM = 256                                   # Campionamento ogni 512 job (b)
-BATCH_NUM = 64                                    # Numero di batch da eseguire (k)
+BATCH_DIM = 16384                           # Campionamento ogni 16384 job (b)
+BATCH_NUM = 25                              # Numero di campionamenti da eseguire (k)
 INFINITE_HORIZON_TIME = BATCH_DIM * BATCH_NUM       # Lunghezza del campione
 
 # ---------------- FINITE HORIZON SIMULATION ----------------
@@ -247,66 +249,79 @@ def infinite_horizon_run():
     # -------------------- Converti in DataFrame unico --------------------
     all_data = []
     for key in metrics.keys():
-        for snap in metrics[key]:
-            snap["pool_name"] = key  # Aggiungi info sul pool
-            all_data.append(snap)
+        if isinstance(metrics[key], list):
+            for snap in metrics[key]:
+                snap["pool_name"] = key
+                all_data.append(snap)
+        else:  # caso turnstiles (dizionario per server)
+            for server_name, server_snaps in metrics[key].items():
+                for snap in server_snaps:
+                    snap["pool_name"] = f"{key}_{server_name}"
+                    all_data.append(snap)
 
     df = pd.DataFrame(all_data)
     df = df.sort_values(["pool_name", "time"])
+
+    # 🔹 Aggiungi colonna batch (contatore snapshot per pool)
+    df["batch"] = df.groupby("pool_name").cumcount() + 1
+
+    # --- Crea cartella ---
+    out_dir = "infinite_plots"
+    os.makedirs(out_dir, exist_ok=True)
 
     # -------------------- Grafici per singolo pool --------------------
     pool_names = df["pool_name"].unique()
 
     for pool in pool_names:
         df_pool = df[df["pool_name"] == pool]
-        t = df_pool["time"]
+        x = df_pool["batch"]  # uso batch al posto del tempo
 
         plt.figure(figsize=(12, 6))
 
         plt.subplot(2, 2, 1)
-        plt.plot(t, df_pool["avg_utilization"], label="Utilizzazione media")
-        plt.xlabel("Tempo")
+        plt.plot(x, df_pool["avg_utilization"], label="Utilizzazione media")
+        plt.xlabel("Batch")
         plt.ylabel("Utilizzazione")
         plt.title(f"Pool: {pool} — Utilizzazione")
         plt.grid(True)
 
         plt.subplot(2, 2, 2)
-        plt.plot(t, df_pool["avg_waiting_time"], label="Tempo medio di attesa", color="orange")
-        plt.xlabel("Tempo")
+        plt.plot(x, df_pool["avg_waiting_time"], label="Tempo medio di attesa", color="orange")
+        plt.xlabel("Batch")
         plt.ylabel("Attesa (s)")
         plt.title(f"Pool: {pool} — Tempo medio di attesa")
         plt.grid(True)
 
         plt.subplot(2, 2, 3)
-        plt.plot(t, df_pool["avg_response_time"], label="Tempo medio di risposta", color="green")
-        plt.xlabel("Tempo")
+        plt.plot(x, df_pool["avg_response_time"], label="Tempo medio di risposta", color="green")
+        plt.xlabel("Batch")
         plt.ylabel("Risposta (s)")
         plt.title(f"Pool: {pool} — Tempo medio di risposta")
         plt.grid(True)
 
         plt.subplot(2, 2, 4)
-        plt.plot(t, df_pool["avg_queue_population"], label="Popolazione media in coda", color="purple")
-        plt.xlabel("Tempo")
+        plt.plot(x, df_pool["avg_queue_population"], label="Popolazione media in coda", color="purple")
+        plt.xlabel("Batch")
         plt.ylabel("Lq")
         plt.title(f"Pool: {pool} — Popolazione media in coda")
         plt.grid(True)
 
         plt.tight_layout()
-        plt.savefig(f"{pool}_metrics.png")
+        plt.savefig(os.path.join(out_dir, f"{pool}_metrics.png"))
         plt.close()
 
     # -------------------- Grafico comparativo tra pool --------------------
     plt.figure(figsize=(12, 6))
     for pool in pool_names:
         df_pool = df[df["pool_name"] == pool]
-        plt.plot(df_pool["time"], df_pool["avg_utilization"], label=pool)
+        plt.plot(df_pool["batch"], df_pool["avg_utilization"], label=pool)
 
-    plt.xlabel("Tempo")
+    plt.xlabel("Batch")
     plt.ylabel("Utilizzazione media")
-    plt.title("Utilizzazione media per Pool nel tempo")
+    plt.title("Utilizzazione media per Pool per batch")
     plt.legend()
     plt.grid(True)
-    plt.savefig("all_pools_utilization.png")
+    plt.savefig(os.path.join(out_dir, "all_pools_utilization.png"))
     plt.close()
 
     return df

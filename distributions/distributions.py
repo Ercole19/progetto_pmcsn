@@ -36,7 +36,7 @@
 #
 # --------------------------------------------------------------------------
 
-from rng.rng import random
+from libs.rng import random
 from math import log, sqrt, exp
 
 
