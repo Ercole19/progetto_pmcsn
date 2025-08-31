@@ -114,13 +114,13 @@ def test_batch_configurations_multiple_metrics(
 
     if not valid_configs:
         if verbose:
-            print("❌ Nessuna configurazione valida trovata.")
+            print("Nessuna configurazione valida trovata.")
         return None
 
     best_config = min(valid_configs, key=lambda x: x["score"])
 
     if verbose:
-        print("\n✅ Configurazione ottimale trovata:")
+        print("\nConfigurazione ottimale trovata:")
         print(f"   b = {best_config['b']}, k = {best_config['k']}, score medio = {best_config['score']:.6f}")
         for name, stats in best_config["metrics"].items():
             print(f"   ➤ {name:22s} ρ₁ = {stats['acf1']:.4f}  CIrel = {stats['ci_rel']:.6f}  score = {stats['score']:.6f}")

@@ -20,7 +20,7 @@ class Server:
         self.num_in_system = 0
         self.total_busy_time = 0.0
         self.debug = debug
-        self.last_event_time = 0.0   # 🔑 traccia l'ultimo istante in cui ho aggiornato il busy time
+        self.last_event_time = 0.0   #traccia l'ultimo istante in cui ho aggiornato il busy time
 
     def reset_server(self):
         self.state = 0
@@ -40,7 +40,7 @@ class Server:
         self.last_event_time = current_time
 
     def start_service(self, event, event_list, times, queue_time=0):
-        # 🔑 aggiorna busy time prima di cambiare stato
+        # aggiorna busy time prima di cambiare stato
         self.update_busy_time(times.next)
         self.state = 1
 
@@ -60,7 +60,7 @@ class Server:
     def handle_departure(self, event, event_list, pool=None, times=None):
         completion_time = times.next
 
-        # 🔑 aggiorna busy time prima di liberare il server
+        # aggiorna busy time prima di liberare il server
         self.update_busy_time(completion_time)
 
         self.completed.append(completion_time)
@@ -84,7 +84,7 @@ class Server:
             heapq.heappush(event_list, (new_event.event_time, "A", new_event))
 
     def utilization(self, current_time):
-        # 🔑 prima di calcolare, aggiorna il busy time fino a current_time
+        #prima di calcolare, aggiorna il busy time fino a current_time
         self.update_busy_time(current_time)
         return self.total_busy_time / max(1e-9, current_time)
 
@@ -706,7 +706,7 @@ class AirportSimulation:
                     #self.next_sampling = self.completed_jobs + self.sampling_rate
                     print(f"Batch {self.processed_batch}/{self.batch_num}")
 
-                    self.reset_sistem()  # ⬅️ Resetta tutto
+                    self.reset_sistem()  # Resetta tutto
 
                     self.last_arrival_time = {k: 0.0 for k in [
                         "business", "premium_economy", "economy", "flexi_plus", "self_bd", "bd",

@@ -1,5 +1,4 @@
 import os
-
 from libs.rng import *
 import pandas as pd
 from simulation import AirportSimulation
