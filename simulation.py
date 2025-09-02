@@ -5,6 +5,7 @@ from params import *
 from libs.rng import *
 from utils.computeBatchMeans import *
 from utils.utils import truncate_lognormal
+from lambda_scaler import *
 
 # -------------------- Server --------------------
 class Server:
@@ -78,6 +79,10 @@ class Server:
         else:
             pool.start_next(event_list, times)
 
+        if isinstance(self, SecurityCheckServer):
+            self.passenger_exit += 1
+
+
         next_center_name = getattr(event, "next_center", None)
         if next_center_name is not None:
             new_event = Event(completion_time, "A", next_center_name)
@@ -132,13 +137,14 @@ class BagDropCheckInServer(Server):
 
 class TurnstileServer(Server):
     def __init__(self, name):
-        super().__init__(name, lambda: 3)  # costante
+        super().__init__(name, lambda: 10)  # costante
         self.queue = deque()
 
 class SecurityCheckServer(Server):
     def __init__(self, name):
         super().__init__(name,
             lambda: truncate_lognormal(4.09, 0.091, 30, 300))  # 30 s - 5 min
+        self.passenger_exit = 0
 
 
 
@@ -275,7 +281,9 @@ class AirportSimulation:
         self.servers = []
         self.server_pools = {}
         self.completed_jobs = 0
+        self.arrivals = 0
         self.passenger_routing = {}
+        self.counter = 0
         self.metrics = {
             "business": [],
             "premium_economy": [],
@@ -296,35 +304,26 @@ class AirportSimulation:
         self.last_arrival_time = {}
         self.current_slot = None
         self.time_slots = [
-            (0, 359*60          , "night"),
-            (360*60, 539*60     , "morning"),
-            (540*60, 719*60     , "late_morning"),
-            (720*60, 899*60     , "early_afternoon"),
-            (900*60, 1139*60    , "late_afternoon"),
-            (1140*60, 1319*60   , "evening"),
-            (1320*60, 1440*60   , "late_evening"),
-        ]
+            (0, 359*60 + 59         , "night"),
+            (360*60, 539*60 +59     , "morning"),
+            (540*60, 719*60   +59  , "late_morning"),
+            (720*60, 899*60  +59   , "early_afternoon"),
+            (900*60, 1139*60 +59   , "late_afternoon"),
+            (1140*60, 1319*60 +59  , "evening"),
+            (1320*60, 1440*60 +59  , "late_evening"),
+         ]
         self.lambdas = {
-            "business": LAMBDA_BC,
-            "premium_economy": LAMBDA_PE,
-            "economy": LAMBDA_ECO,
-            "flexi_plus": LAMBDA_FP,
-            "self_bd": LAMBDA_SBD,
-            "bd": LAMBDA_BD,
-            "turnstile_area": LAMBDA_BM_TOT,
-            "exogenous": LAMBDA_E,
-            "fast_track_turnstile": LAMBDA_6,
-            "security_area": LAMBDA_7,
-            "fast_track_security_area": LAMBDA_6,
-        }
-        self.percent = {
-            "night": 0.066,
-            "morning": 0.165,
-            "late_morning": 0.165,
-            "early_afternoon": 0.165,
-            "late_afternoon": 0.196,
-            "evening": 0.165,
-            "late_evening": 0.078
+            "business": 0.0,
+            "premium_economy": 0.0,
+            "economy": 0.0,
+            "flexi_plus": 0.0,
+            "self_bd": 0.0,
+            "bd": 0.0,
+            "turnstile_area_external": 0.0,
+            "exogenous": 0.0,
+            "fast_track_turnstile": 0.0,
+            "security_area": 0.0,
+            "fast_track_security_area": 0.0,
         }
         self.next_sampling = self.sampling_rate
         self.init_servers_and_pools()
@@ -350,6 +349,8 @@ class AirportSimulation:
         for start, end, name in self.time_slots:
             if start <= current_time < end:
                 self.current_slot = name
+                lambda_scaler = LambdaScaler()
+                self.lambdas = lambda_scaler.return_new_lambdas(self.current_slot)
                 break
         print(f"  [TIME SLOT] Current time slot: {self.current_slot}")
 
@@ -372,16 +373,16 @@ class AirportSimulation:
 
         else:
             self.server_pools = {
-                "business":                 ServerPool([ClassicCheckInServer("business_0")]),
-                "premium_economy":          ServerPool([ClassicCheckInServer("premium_economy_0")]),
+                "business":                 ServerPool([ClassicCheckInServer(f"business_{index}") for index in range(4)]),
+                "premium_economy":          ServerPool([ClassicCheckInServer(f"premium_economy_{index}") for index in range(4)]),
                 "economy":                  ServerPool([ClassicCheckInServer(f"economy_{index}") for index in range(3)]),
                 "flexi_plus":               ServerPool([ClassicCheckInServer("flexi_plus_0")]),
                 "self_bd":                  ServerPool([BagDropCheckInServer(f"self_bd_{index}") for index in range(2)]),
                 "bd":                       ServerPool([BagDropCheckInServer(f"bd_{index}") for index in range(4)]),
                 "fast_track_turnstile":     ServerPool([TurnstileServer("fast_track_turnstile_0")]),
-                "fast_track_security_area": ServerPool([SecurityCheckServer(f"fast_track_sec_{index}") for index in range(2)]),
+                "fast_track_security_area": ServerPool([SecurityCheckServer(f"fast_track_sec_{index}") for index in range(4)]),
                 "turnstiles":               TurnstilePool([TurnstileServer(f"turnstile_{index}") for index in range(4)]),
-                "security_area":            ServerPool([SecurityCheckServer(f"security_{index}") for index in range(6)])
+                "security_area":            ServerPool([SecurityCheckServer(f"security_{index}") for index in range(12)])
             }
 
         for pool in self.server_pools.values():
@@ -402,19 +403,8 @@ class AirportSimulation:
 
     # -------------------- Interarrival --------------------
     def generate_interarrival_time(self, op_index):
-
-        multiplier = None
-
-        if self.type_simulation == "finite":
-            slot_multiplier = {k: v / 0.14 for k, v in self.percent.items()}
-            multiplier = slot_multiplier.get(self.current_slot)
-
-        elif  self.type_simulation == "infinite":
-            slot_multiplier = {k: v / 1 for k, v in self.percent.items()}
-            multiplier = slot_multiplier.get("night")
-
-        lambda_rescaled = self.lambdas[op_index] * multiplier
-        return exponential(1 / lambda_rescaled)
+      lambda_rescaled = self.lambdas[op_index]
+      return exponential(1 / lambda_rescaled)
 
     # -------------------- Arrival processing --------------------
     def process_arrival(self, event):
@@ -428,10 +418,19 @@ class AirportSimulation:
             "flexi_plus",
             "self_bd",
             "bd",
-            "turnstile_area"
+            "turnstile_area_external"
         ]
         if op in input_flow_zone_a:
+            self.arrivals += 1
             self.generate_new_arrival(op)
+
+        if op == "turnstile_area_external":
+            op = "turnstile_area"
+
+
+        if op == "turnstile_area_exogenous":
+            op = "turnstile_area"
+            self.arrivals += 1
 
         if op == "turnstile_area":
             select_stream(20)
@@ -463,15 +462,18 @@ class AirportSimulation:
         select_stream({
             "business": 10, "premium_economy": 11, "economy": 12,
             "flexi_plus": 13, "self_bd": 14, "bd": 15,
-            "turnstile_area": 16
+            "turnstile_area_external": 16
         }[op_index])
         interarrival = self.generate_interarrival_time(op_index)
-        event_time = max(self.last_arrival_time.get(op_index, 0.0) + interarrival, self.times.next + interarrival)
+        #event_time = max(self.last_arrival_time.get(op_index, 0.0) + interarrival, self.times.next + interarrival)
+
+        event_time = self.last_arrival_time[op_index] + interarrival
 
         self.last_arrival_time[op_index] = event_time
         if event_time <= self.end_time:
             heapq.heappush(self.event_list, (event_time, "A", Event(event_time, "A", op_index)))
             print(f"  [SCHEDULE] New {op_index} at t={event_time:.2f}")
+
 
     # -------------------- Exogenous arrivals --------------------
     def generate_exogenous_arrival(self):
@@ -481,15 +483,12 @@ class AirportSimulation:
         event_time = max(self.last_arrival_time.get("exogenous", 0.0) + interarrival, self.times.next + interarrival)
         self.last_arrival_time["exogenous"] = event_time
         if event_time <= self.end_time:
-            arrival_time = event_time + self.transit_time_exogenous()
-            event = Event(arrival_time, "E", "turnstile_area")
+            arrival_time = event_time
+            event = Event(arrival_time, "E", "turnstile_area_exogenous")
             event.exogenous = True
             heapq.heappush(self.event_list, (arrival_time, "E", event))
             print(f"  [SCHEDULE] Exogenous B+C passenger at t={arrival_time:.2f} (generated at {event_time:.2f})")
 
-    @staticmethod
-    def transit_time_exogenous():
-        return lognormal(5.1895, 0.08319)
 
     # -------------------- Process next event --------------------
     def process_next_event(self):
@@ -509,6 +508,8 @@ class AirportSimulation:
         if event_type in ["A", "E"]:
             self.process_arrival(event)
         elif event_type == "C" and server is not None:
+            if event.event_type == "E":
+                event.exogenous = False
             ptype = self.passenger_routing.get(event.op_index)
             pool = ptype.server_pool if ptype else None
             server.handle_departure(event, self.event_list, pool=pool, times=self.times)
@@ -538,18 +539,12 @@ class AirportSimulation:
 
             # --- Scaling arrivi ---
 
-            if self.type_simulation == "finite":
-                slot_multiplier = {k: v / 0.14 for k, v in self.percent.items()}
-                multiplier = slot_multiplier.get(self.current_slot)
-
-            else :
-                slot_multiplier = {k: v / 1 for k, v in self.percent.items()}
-                multiplier = slot_multiplier.get("night")
 
             if pool_name in ("turnstiles", "fast_track_turnstile"):
-                lambda_rescaled = self.lambdas["turnstile_area"] * multiplier
+                lambda_rescaled = self.lambdas["turnstile_area_external"]
             else:
-                lambda_rescaled = self.lambdas[pool_name] * multiplier
+                lambda_rescaled = self.lambdas[pool_name]
+
 
             # ------------------- Metrics per server (solo tornelli) -------------------
             if pool_name == "turnstiles":
@@ -639,13 +634,14 @@ class AirportSimulation:
         #self.next_sampling = self.sampling_rate da levare se tutto funziona
         #self.generate_new_arrival()
         #self.generate_exogenous_arrival()
+        _, _ = self.process_next_event()
 
         self.last_arrival_time = {k: 0.0 for k in
                                   ["business", "premium_economy", "economy", "flexi_plus", "self_bd", "bd",
-                                   "turnstile_area", "exogenous"]}
+                                   "turnstile_area_external", "exogenous"]}
 
         # Genera un arrivo iniziale per ogni centro (tipo di passeggero)
-        for op_index in ["business", "premium_economy", "economy", "flexi_plus", "self_bd", "bd", "turnstile_area"]:
+        for op_index in ["business", "premium_economy", "economy", "flexi_plus", "self_bd", "bd", "turnstile_area_external"]:
             self.generate_new_arrival(op_index)
         self.generate_exogenous_arrival()
 

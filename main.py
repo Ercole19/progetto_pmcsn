@@ -16,7 +16,7 @@ INFINITE_HORIZON_TIME = BATCH_DIM * BATCH_NUM       # Lunghezza del campione
 
 # ---------------- FINITE HORIZON SIMULATION ----------------
 FINITE_HORIZON =        True
-FINITE_HORIZON_TIME =  86400.0     # una giornata completa all'aeroporto --> 00:00 - 23:59
+FINITE_HORIZON_TIME =  3600.0 * 24     # una giornata completa all'aeroporto --> 00:00 - 23:59
 REPLICATION_NUM =      5           # numero di repliche eseguite
 SAMPLING_RATE =        60           # Tempo di campionamento per le statistiche
 
