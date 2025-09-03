@@ -128,15 +128,12 @@ class SecurityCheckServer(Server):
 class ClassicCheckInServer(Server):
     def __init__(self, name):
         super().__init__(name,
-            lambda: truncate_lognormal(5.1895, 0.08319, 30, 300))  # 30 s - 5 min
+            lambda: truncate_lognormal(5.1895, 0.05, 40, 250))  # meno variabilità
 
 class BagDropCheckInServer(Server):
     def __init__(self, name):
         super().__init__(name,
-            lambda: truncate_lognormal(4.5, 0.25, 20, 180))  # media ~90s, std ~22s
-
-
-
+            lambda: truncate_lognormal(4.5, 0.15, 40, 140))  # meno variabilità, più stretto
 
 class TurnstileServer(Server):
     def __init__(self, name):
