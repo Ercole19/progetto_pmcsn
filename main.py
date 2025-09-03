@@ -1,6 +1,7 @@
 import os
 from libs.rng import *
 import pandas as pd
+import numpy as np
 from simulation import AirportSimulation
 import matplotlib.pyplot as plt
 
@@ -17,11 +18,12 @@ INFINITE_HORIZON_TIME = BATCH_DIM * BATCH_NUM       # Lunghezza del campione
 # ---------------- FINITE HORIZON SIMULATION ----------------
 FINITE_HORIZON =        True
 FINITE_HORIZON_TIME =  3600.0 * 24     # una giornata completa all'aeroporto --> 00:00 - 23:59
-REPLICATION_NUM =      5           # numero di repliche eseguite
+REPLICATION_NUM =      7           # numero di repliche eseguite
 SAMPLING_RATE =        60           # Tempo di campionamento per le statistiche
 
 
 def finite_horizon_run():
+    total_percentiles_waits = []
     all_seeds_metrics = {}  # per memorizzare df di ogni seed
     current_seed = SEED
     seed_used.append(current_seed)
@@ -37,6 +39,7 @@ def finite_horizon_run():
         )
 
         replica_metrics = sim.run()
+        total_percentiles_waits.append(replica_metrics["daily_percentile_90_wait"])
 
         # -------------------- Stampa metriche finali e conteggi --------------------
         total_in_system = 0
@@ -73,15 +76,16 @@ def finite_horizon_run():
         # -------------------- Converti in DataFrame --------------------
         all_data = []
         for key in replica_metrics.keys():
-            if isinstance(replica_metrics[key], list):
-                for snap in replica_metrics[key]:
-                    snap["pool_name"] = key
-                    all_data.append(snap)
-            else:  # turnstiles
-                for server_name, server_snaps in replica_metrics[key].items():
-                    for snap in server_snaps:
-                        snap["pool_name"] = f"{key}_{server_name}"
+            if key != "daily_percentile_90_wait":
+                if isinstance(replica_metrics[key], list):
+                    for snap in replica_metrics[key]:
+                        snap["pool_name"] = key
                         all_data.append(snap)
+                else:  # turnstiles
+                    for server_name, server_snaps in replica_metrics[key].items():
+                        for snap in server_snaps:
+                            snap["pool_name"] = f"{key}_{server_name}"
+                            all_data.append(snap)
 
         df = pd.DataFrame(all_data)
         df = df.sort_values(["pool_name", "time"])
@@ -115,6 +119,9 @@ def finite_horizon_run():
         seed_used.append(current_seed)
 
     # -------------------- Grafici globali per metrica e per pool --------------------
+    total_percentile = np.percentile(total_percentiles_waits, 90)
+    print(f"90th percentile global: {total_percentile:.2f} seconds")
+
     metrics = ["avg_utilization", "avg_waiting_time", "avg_response_time", "avg_queue_population"]
 
     # Recupero tutti i pool/centro presenti

@@ -1,7 +1,7 @@
 import heapq
 from collections import deque
-from distributions.distributions import exponential, lognormal
-from params import *
+from distributions.distributions import exponential
+import numpy as np
 from libs.rng import *
 from utils.computeBatchMeans import *
 from utils.utils import truncate_lognormal
@@ -133,11 +133,14 @@ class ClassicCheckInServer(Server):
 class BagDropCheckInServer(Server):
     def __init__(self, name):
         super().__init__(name,
-            lambda: truncate_lognormal(4.064, 0.246, 20, 180))  # 20 s - 3 min
+            lambda: truncate_lognormal(4.5, 0.25, 20, 180))  # media ~90s, std ~22s
+
+
+
 
 class TurnstileServer(Server):
     def __init__(self, name):
-        super().__init__(name, lambda: 10)  # costante
+        super().__init__(name, lambda: 5)  # costante
         self.queue = deque()
 
 class SecurityCheckServer(Server):
@@ -300,6 +303,7 @@ class AirportSimulation:
                 "turnstile_3": [],
             },
             "security_area": [],
+            "daily_percentile_90_wait" : 0.0
         }
         self.last_arrival_time = {}
         self.current_slot = None
@@ -373,16 +377,16 @@ class AirportSimulation:
 
         else:
             self.server_pools = {
-                "business":                 ServerPool([ClassicCheckInServer(f"business_{index}") for index in range(4)]),
-                "premium_economy":          ServerPool([ClassicCheckInServer(f"premium_economy_{index}") for index in range(4)]),
-                "economy":                  ServerPool([ClassicCheckInServer(f"economy_{index}") for index in range(3)]),
-                "flexi_plus":               ServerPool([ClassicCheckInServer("flexi_plus_0")]),
-                "self_bd":                  ServerPool([BagDropCheckInServer(f"self_bd_{index}") for index in range(2)]),
-                "bd":                       ServerPool([BagDropCheckInServer(f"bd_{index}") for index in range(4)]),
+                "business":                 ServerPool([ClassicCheckInServer(f"business_{index}") for index in range(1)]),
+                "premium_economy":          ServerPool([ClassicCheckInServer(f"premium_economy_{index}") for index in range(1)]),
+                "economy":                  ServerPool([ClassicCheckInServer(f"economy_{index}") for index in range(5)]),
+                "flexi_plus":               ServerPool([ClassicCheckInServer(f"flexi_plus_{index}") for index in range(1)]),
+                "self_bd":                  ServerPool([BagDropCheckInServer(f"self_bd_{index}") for index in range(1)]),
+                "bd":                       ServerPool([BagDropCheckInServer(f"bd_{index}") for index in range(5)]),
                 "fast_track_turnstile":     ServerPool([TurnstileServer("fast_track_turnstile_0")]),
-                "fast_track_security_area": ServerPool([SecurityCheckServer(f"fast_track_sec_{index}") for index in range(4)]),
+                "fast_track_security_area": ServerPool([SecurityCheckServer(f"fast_track_sec_{index}") for index in range(2)]),
                 "turnstiles":               TurnstilePool([TurnstileServer(f"turnstile_{index}") for index in range(4)]),
-                "security_area":            ServerPool([SecurityCheckServer(f"security_{index}") for index in range(12)])
+                "security_area":            ServerPool([SecurityCheckServer(f"security_{index}") for index in range(7)])
             }
 
         for pool in self.server_pools.values():
@@ -688,4 +692,12 @@ class AirportSimulation:
                         print(f"  Server: {server_name}")
                         compute_batch_means_cis(server_metrics)
 
+        total_queues = []
+        for pool_name, pool in self.server_pools.items():
+            for server in pool.servers:
+                if isinstance(server, ClassicCheckInServer) or isinstance(server, BagDropCheckInServer):
+                    total_queues += server.queue_waits
+        percentile_90 = np.percentile(total_queues, 90)
+        print(f"90th percentile global: {percentile_90:.2f} seconds")
+        self.metrics["daily_percentile_90_wait"] = percentile_90
         return self.metrics

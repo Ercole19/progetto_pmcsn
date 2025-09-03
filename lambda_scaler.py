@@ -2,20 +2,20 @@ class LambdaScaler:
     def __init__(self):
         self.total_daily_passengers = 29522
 
-        self.P_T = 0.20              # Probabilità che un passeggero scelga una compagnia Tradizionale
-        self.P_L = 0.80              # Probabilità che un passeggero scelga una compagnia Low-Cost
+        self.P_T = 0.2025              # Probabilità che un passeggero scelga una compagnia Tradizionale
+        self.P_L = 0.7975              # Probabilità che un passeggero scelga una compagnia Low-Cost
 
         self.P_T_B = 0.10             # Probabilità che un passeggero scelga la tariffa Business-Class
-        self.P_T_PE = 0.20           # Probabilità che un passeggero scelga la tariffa Premium-Economy
-        self.P_T_E = 0.45            # Probabilità che un passeggero scelga la tariffa Economy
-        self.P_T_OB = 0.25           # Probabilità che un passeggero abbia effettuato check-in online e non abbia il bagaglio da stiva
+        self.P_T_PE = 0.10           # Probabilità che un passeggero scelga la tariffa Premium-Economy
+        self.P_T_E = 0.475            # Probabilità che un passeggero scelga la tariffa Economy
+        self.P_T_OB = 0.325           # Probabilità che un passeggero abbia effettuato check-in online e non abbia il bagaglio da stiva
 
         self.P_L_OB = 0.70           # Probabilità che un passeggero non abbia il bagaglio da stiva
         self.P_L_NOB = 1 - self.P_L_OB    # Probabilità che un passeggero richieda servizi aggiuntivi
 
         self.P_L_FP = 0.05           # Probabilità che un passeggero abbia scelto il servizio Flexi-Plus
-        self.P_L_SB_e_D = 0.10       # Probabilità che un passeggero esegue autonomamente l'imbarco del bagaglio da stiva
-        self.P_L_B_e_D = 0.85        # Probabilità che un passeggero non esegue autonomamente l'imbarco del bagaglio da stiva
+        self.P_L_SB_e_D = 0.125       # Probabilità che un passeggero esegue autonomamente l'imbarco del bagaglio da stiva
+        self.P_L_B_e_D = 0.825        # Probabilità che un passeggero non esegue autonomamente l'imbarco del bagaglio da stiva
 
         self.P_FT = 0.20             # Probabilità che un passeggero decida di acquistare il servizio Fast-Track
         self.P_N = 1 - self.P_FT          # Probabilità che un passeggero non acquisti il servizio Fast-Track
