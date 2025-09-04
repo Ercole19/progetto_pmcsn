@@ -2,7 +2,7 @@ import os
 from libs.rng import *
 import pandas as pd
 import numpy as np
-from simulation import AirportSimulation
+from improved_simulation import AirportSimulation
 import matplotlib.pyplot as plt
 
 # Parametri della simulazione
@@ -18,7 +18,7 @@ INFINITE_HORIZON_TIME = BATCH_DIM * BATCH_NUM       # Lunghezza del campione
 # ---------------- FINITE HORIZON SIMULATION ----------------
 FINITE_HORIZON =        True
 FINITE_HORIZON_TIME =  3600.0 * 24     # una giornata completa all'aeroporto --> 00:00 - 23:59
-REPLICATION_NUM =      7           # numero di repliche eseguite
+REPLICATION_NUM =      1           # numero di repliche eseguite
 SAMPLING_RATE =        60           # Tempo di campionamento per le statistiche
 
 
@@ -48,28 +48,35 @@ def finite_horizon_run():
             # Gestione pool vuoti o turnstiles
             if isinstance(snapshots, dict):  # caso turnstiles
                 all_snaps = []
-                for server_snaps in snapshots.values():
+                for server_name, server_snaps in snapshots.items():
+                    all_snaps = []
                     all_snaps.extend(server_snaps)
-                if not all_snaps:
-                    continue
-                last_snapshot = all_snaps[-1]
+                    if not all_snaps:
+                        continue
+                    last_snapshot = all_snaps[-1]
+                    print(f"  Pool={server_name}")
+                    print(f"    In System: {last_snapshot.get('in_system', 0)}")
+                    print(f"    Queue Length: {last_snapshot.get('queue_length', 0)}")
+                    print(f"    Utilization: {last_snapshot.get('avg_utilization', 0):.2f}")
+                    print(f"    Avg Waiting Time: {last_snapshot.get('avg_waiting_time', 0):.2f}")
+                    print(f"    Avg Response Time: {last_snapshot.get('avg_response_time', 0):.2f}")
+                    total_in_system += last_snapshot.get('in_system', 0) + last_snapshot.get("queue_length", 0)
+
             elif isinstance(snapshots, list):
                 if not snapshots:
                     continue
                 last_snapshot = snapshots[-1]
+                print(f"  Pool={pool_name}")
+                print(f"    In System: {last_snapshot.get('in_system', 0)}")
+                print(f"    Queue Length: {last_snapshot.get('queue_length', 0)}")
+                print(f"    Utilization: {last_snapshot.get('avg_utilization', 0):.2f}")
+                print(f"    Avg Waiting Time: {last_snapshot.get('avg_waiting_time', 0):.2f}")
+                print(f"    Avg Response Time: {last_snapshot.get('avg_response_time', 0):.2f}")
+                total_in_system += last_snapshot.get('in_system', 0)
             else:
                 continue
 
-            total_in_system += last_snapshot.get("in_system", 0)
-
-            print(f"  Pool={pool_name}")
-            print(f"    In System: {last_snapshot.get('in_system', 0)}")
-            print(f"    Queue Length: {last_snapshot.get('queue_length', 0)}")
-            print(f"    Utilization: {last_snapshot.get('avg_utilization', 0):.2f}")
-            print(f"    Avg Waiting Time: {last_snapshot.get('avg_waiting_time', 0):.2f}")
-            print(f"    Avg Response Time: {last_snapshot.get('avg_response_time', 0):.2f}")
-
-        print(f"\n  Totale passeggeri completati: {replica_metrics["security_area"][-1]["passengers_completed"]}")
+        print(f"\n  Totale passeggeri completati: {replica_metrics["security_area"]["security_0"][-1]["passengers_completed"]}")
         print(f"  Totale passeggeri ancora in sistema: {total_in_system}")
         print("-" * 50)
 
@@ -93,7 +100,7 @@ def finite_horizon_run():
 
         # -------------------- Grafici per ogni pool --------------------
         out_dir = f"finite_seed_{current_seed}"
-        os.makedirs(out_dir, exist_ok=True)
+        """os.makedirs(out_dir, exist_ok=True)
 
         pool_names = df["pool_name"].unique()
         for pool in pool_names:
@@ -115,6 +122,8 @@ def finite_horizon_run():
             plt.close()
 
         # Aggiorna seed per la prossima replica
+        """
+
         current_seed = get_seed()
         seed_used.append(current_seed)
 

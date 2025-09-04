@@ -2,23 +2,25 @@ class LambdaScaler:
     def __init__(self):
         self.total_daily_passengers = 29522
 
-        self.P_T = 0.2025              # Probabilità che un passeggero scelga una compagnia Tradizionale
-        self.P_L = 0.7975              # Probabilità che un passeggero scelga una compagnia Low-Cost
+        self.P_T = 0.20              # Probabilità che un passeggero scelga una compagnia Tradizionale
+        self.P_L = 0.80              # Probabilità che un passeggero scelga una compagnia Low-Cost
 
-        self.P_T_B = 0.10             # Probabilità che un passeggero scelga la tariffa Business-Class
-        self.P_T_PE = 0.10           # Probabilità che un passeggero scelga la tariffa Premium-Economy
-        self.P_T_E = 0.475            # Probabilità che un passeggero scelga la tariffa Economy
-        self.P_T_OB = 0.325           # Probabilità che un passeggero abbia effettuato check-in online e non abbia il bagaglio da stiva
+        self.P_T_B = 0.1             # Probabilità che un passeggero scelga la tariffa Business-Class
+        self.P_T_PE = 0.1           # Probabilità che un passeggero scelga la tariffa Premium-Economy
+        self.P_T_E = 0.45           # Probabilità che un passeggero scelga la tariffa Economy
+        self.P_T_OB = 0.35           # Probabilità che un passeggero abbia effettuato check-in online e non abbia il bagaglio da stiva
 
-        self.P_L_OB = 0.70           # Probabilità che un passeggero non abbia il bagaglio da stiva
+        self.P_L_OB = 0.7005           # Probabilità che un passeggero non abbia il bagaglio da stiva
         self.P_L_NOB = 1 - self.P_L_OB    # Probabilità che un passeggero richieda servizi aggiuntivi
 
         self.P_L_FP = 0.05           # Probabilità che un passeggero abbia scelto il servizio Flexi-Plus
-        self.P_L_SB_e_D = 0.125       # Probabilità che un passeggero esegue autonomamente l'imbarco del bagaglio da stiva
-        self.P_L_B_e_D = 0.825        # Probabilità che un passeggero non esegue autonomamente l'imbarco del bagaglio da stiva
+        self.P_L_SB_e_D = 0.10       # Probabilità che un passeggero esegue autonomamente l'imbarco del bagaglio da stiva
+        self.P_L_B_e_D = 0.85        # Probabilità che un passeggero non esegue autonomamente l'imbarco del bagaglio da stiva
 
-        self.P_FT = 0.20             # Probabilità che un passeggero decida di acquistare il servizio Fast-Track
-        self.P_N = 1 - self.P_FT          # Probabilità che un passeggero non acquisti il servizio Fast-Track
+        self.P_FT = 0.05             # Probabilità che un passeggero decida di acquistare il servizio Fast-Track
+        self.P_N = 0.55          # Probabilità che un passeggero non acquisti il servizio Fast-Track
+
+        self.TSA = 0.35
 
 
         self.slots_duration = {
@@ -88,20 +90,45 @@ class LambdaScaler:
 
         # -------------------- Ingresso Area di Sicurezza -------------
         LAMBDA_4 = LAMBDA_2 + LAMBDA_3
-        LAMBDA_5 = LAMBDA_4 + LAMBDA_E
+        LAMBDA_4_CHECK_IN = LAMBDA_4 - LAMBDA_BM_TOT
+
+
+
+
 
         # -------------------- Fast-Track --------------------------------
         # Valido sia per l'ingresso al tornello che per l'ingresso all'aera di sicurezza riservato all'area Fast-Track
         LAMBDA_6 = (LAMBDA_4 * self.P_FT) + LAMBDA_BC + LAMBDA_FP
 
+        LAMBDA_6_CHECK_IN = (LAMBDA_4_CHECK_IN * self.P_FT) + LAMBDA_BC + LAMBDA_FP
+        LAMBDA_6_NO_CHECK_IN = LAMBDA_BM_TOT * self.P_FT
+
         # -------------------- Normale --------------------------------
         # Valido sia per l'ingresso al tornello che per l'ingresso all'aera di sicurezza riservato all'area Normale
         LAMBDA_7 = (LAMBDA_4 * self.P_N)
 
-        self.lambdas = {"business": LAMBDA_BC, "premium_economy": LAMBDA_PE, "economy": LAMBDA_ECO,
-                        "flexi_plus": LAMBDA_FP, "self_bd": LAMBDA_SBD, "bd": LAMBDA_BD,
-                        "turnstile_area_external": LAMBDA_BM_TOT, "exogenous": LAMBDA_E, "fast_track_turnstile": LAMBDA_6,
-                        "security_area": LAMBDA_7, "fast_track_security_area": LAMBDA_6, }
+        LAMBDA_8 = (LAMBDA_4 * self.TSA)
+
+
+        LAMBDA_7_CHECK_IN = LAMBDA_4_CHECK_IN * self.P_N
+        LAMBDA_7_NO_CHECK_IN = LAMBDA_BM_TOT * self.P_N
+
+        self.lambdas = {"business": LAMBDA_BC,
+                        "premium_economy": LAMBDA_PE,
+                        "economy": LAMBDA_ECO,
+                        "flexi_plus": LAMBDA_FP,
+                        "self_bd": LAMBDA_SBD,
+                        "bd": LAMBDA_BD,
+                        "turnstile_area_external": LAMBDA_BM_TOT,
+                        "exogenous": LAMBDA_E,
+                        "fast_track_turnstile": LAMBDA_6,
+                        "security_area": LAMBDA_7_NO_CHECK_IN,
+                        "security_area_fast": LAMBDA_7_CHECK_IN,
+                        "fast_track_security_area": LAMBDA_6_NO_CHECK_IN,
+                        "fast_track_security_fast": LAMBDA_6_CHECK_IN,
+                        "tsa_security":   LAMBDA_8,
+                        "tsa_turnstile": LAMBDA_8,
+                        }
 
 
 
