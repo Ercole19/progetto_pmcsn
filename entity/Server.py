@@ -80,7 +80,7 @@ class Server(ABC):
         next_center_name = getattr(event, "next_center", None)
         if next_center_name is not None:
             new_event = Event(completion_time, "A", next_center_name)
-            new_event.check_in_done = True
+            #new_event.check_in_done = True
             heapq.heappush(event_list, (new_event.event_time, "A", new_event))
 
     def utilization(self, current_time):
@@ -163,7 +163,7 @@ class TsaSecurity(Server):
         self.queue = deque()
 
     def get_service(self):
-        return truncate_lognormal(3.7, 0.1, 15, 60)  # Media ≈ 40s
+        return truncate_lognormal(4.09, 0.091, 30, 150)
 
 
 # -------------------- Specialized Servers --------------------

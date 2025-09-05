@@ -2,7 +2,7 @@ import os
 from libs.rng import *
 import pandas as pd
 import numpy as np
-from improved_simulation import AirportSimulation
+from half_improved_simulation import AirportSimulation
 import matplotlib.pyplot as plt
 
 # Parametri della simulazione
@@ -11,14 +11,14 @@ seed_used = []  # Lista dei seed utilizzati per ogni replica della simulazione (
 
 # ---------------- INFINITE HORIZON SIMULATION ----------------
 INFINITE_HORIZON = False
-BATCH_DIM = 16384                           # Campionamento ogni 16384 job (b)
-BATCH_NUM = 25                              # Numero di campionamenti da eseguire (k)
+BATCH_DIM =  16384                           # Campionamento ogni 16384 job (b)
+BATCH_NUM =  25                              # Numero di campionamenti da eseguire (k)
 INFINITE_HORIZON_TIME = BATCH_DIM * BATCH_NUM       # Lunghezza del campione
 
 # ---------------- FINITE HORIZON SIMULATION ----------------
 FINITE_HORIZON =        True
 FINITE_HORIZON_TIME =  3600.0 * 24     # una giornata completa all'aeroporto --> 00:00 - 23:59
-REPLICATION_NUM =      1           # numero di repliche eseguite
+REPLICATION_NUM =      28           # numero di repliche eseguite
 SAMPLING_RATE =        60           # Tempo di campionamento per le statistiche
 
 
@@ -154,7 +154,7 @@ def finite_horizon_run():
             plt.legend()
             plt.grid(True)
 
-            global_dir = "global_metrics"
+            global_dir = "global_metrics_half"
             os.makedirs(global_dir, exist_ok=True)
             plt.savefig(os.path.join(global_dir, f"{pool}_{metric}.png"))
             plt.close()

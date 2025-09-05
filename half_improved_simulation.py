@@ -45,8 +45,8 @@ class AirportSimulation:
             "fast_track_turnstile": 0.0,
             "security_area": 0.0,
             "fast_track_security_area": 0.0,
-            "security_area_fast": 0.0,
-            "fast_track_security_fast": 0.0,
+            "tsa_turnstile": 0.0,
+            "tsa_security": 0.0,
         }
         self.next_sampling = self.sampling_rate
         self.init_servers_and_pools()
@@ -88,11 +88,9 @@ class AirportSimulation:
                 "self_bd":                  MultiServerSingleQueuePool([BagDropCheckInServer(f"self_bd_{index}") for index in range(1)]),
                 "bd":                       MultiServerSingleQueuePool([BagDropCheckInServer(f"bd_{index}") for index in range(5)]),
                 "fast_track_turnstile":     MultiServerSingleQueuePool([TurnstileServer("fast_track_turnstile_0")]),
-                "fast_track_security_area": MultiServerMultiQueuesPool([SecurityCheckServer(f"fast_track_sec_{index}") for index in range(3)]),
-                "fast_track_security_fast": MultiServerMultiQueuesPool([FastSecurityCheckServer(f"fast_track_sec_fast_{index}") for index in range(1)]),
+                "fast_track_security_area": MultiServerMultiQueuesPool([SecurityCheckServer(f"fast_track_sec_{index}") for index in range(4)]),
                 "turnstiles":               MultiServerMultiQueuesPool([TurnstileServer(f"turnstile_{index}") for index in range(4)]),
-                "security_area":            MultiServerMultiQueuesPool([SecurityCheckServer(f"security_{index}") for index in range(9)]),
-                "security_area_fast":       MultiServerMultiQueuesPool([FastSecurityCheckServer(f"security_fast_{index}") for index in range(3)]),
+                "security_area":            MultiServerMultiQueuesPool([SecurityCheckServer(f"security_{index}") for index in range(12)]),
                 "tsa_security":             MultiServerMultiQueuesPool([TsaSecurityCheckServer(f"tsa_security_{index}") for index in range(7)]),
                 "tsa_turnstile":            MultiServerMultiQueuesPool([TsaTurnstile(f"tsa_turnstile_{index}") for index in range(2)]),
 
@@ -107,10 +105,8 @@ class AirportSimulation:
             "bd":                       PassengerType("BD",                 self.server_pools["bd"],                    next_center="turnstile_area"),
             "fast_track_turnstile":     PassengerType("FastTrackTurnstile", self.server_pools["fast_track_turnstile"],  next_center="fast_track_security_area"),
             "fast_track_security_area": PassengerType("FastTrackSecurity",  self.server_pools["fast_track_security_area"]),
-            "fast_track_security_fast": PassengerType("FastTrackSecurity",  self.server_pools["fast_track_security_fast"]),
             "turnstile":                PassengerType("Turnstile",          self.server_pools["turnstiles"],            next_center="security_area"),
             "security_area":            PassengerType("Security",           self.server_pools["security_area"]),
-            "security_area_fast":       PassengerType("Security",           self.server_pools["security_area_fast"]),
             "tsa_security":             PassengerType("Security",           self.server_pools["tsa_security"]),
             "tsa_turnstile":            PassengerType("Turnstile",          self.server_pools["tsa_turnstile"],         next_center="tsa_security"),
         }
@@ -168,24 +164,17 @@ class AirportSimulation:
 
             if choice == "fast":
                 pool = self.server_pools["fast_track_turnstile"]
-                if event.check_in_done:
-                    event.next_center = "fast_track_security_fast"
-                else:
-                    event.next_center = "fast_track_security_area"
+                event.next_center = "fast_track_security_area"
                 event.op_index = "fast_track_turnstile"
 
             elif choice == "tsa":
                 pool = self.server_pools["tsa_turnstile"]
                 event.next_center = "tsa_security"
-
                 event.op_index = "tsa_turnstile"
 
             else:  # normal
                 pool = self.server_pools["turnstiles"]
-                if event.check_in_done:
-                    event.next_center = "security_area_fast"
-                else:
-                    event.next_center = "security_area"
+                event.next_center = "security_area"
                 event.op_index = "turnstile"
 
             print(f"  [ROUTING] {op} passenger → {choice} priority")
@@ -251,14 +240,6 @@ class AirportSimulation:
         if event_time <= self.end_time:
             arrival_time = event_time
             event = Event(arrival_time, "E", "turnstile_area_exogenous")
-
-            select_stream(77)
-            r = random()
-            delay_or_no = "check" if r < 0.5 else "no_check"
-            if delay_or_no == "check":
-                event.check_in_done = True
-            else:
-                event.check_in_done = False
             event.exogenous = True
             heapq.heappush(self.event_list, (arrival_time, "E", event))
             print(f"  [SCHEDULE] Exogenous B+C passenger at t={arrival_time:.2f} (generated at {event_time:.2f})")
@@ -462,7 +443,7 @@ class AirportSimulation:
         total_queues = []
         for pool_name, pool in self.server_pools.items():
             for server in pool.servers:
-                if isinstance(server, ClassicCheckInServer) or isinstance(server, BagDropCheckInServer) :
+                if isinstance(server, SecurityCheckServer) or isinstance(server, TsaSecurityCheckServer):
                     total_queues += server.queue_waits
         percentile_90 = np.percentile(total_queues, 90)
         print(f"90th percentile global: {percentile_90:.2f} seconds")
