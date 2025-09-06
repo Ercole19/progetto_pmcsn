@@ -1,10 +1,10 @@
-from simulation import AirportSimulation
+from final_simulation import AirportSimulation
 from compute_batch_analysis import *
 from libs.rng import *
 
 # === Parametri iniziali "di esplorazione" ===
 SAMPLING_RATE = 256          # Ogni quanti job si campiona (b provvisorio)
-BATCH_NUM = 35684            # Numero di batch provvisori (deve essere alto)
+BATCH_NUM = 10            # Numero di batch provvisori (deve essere alto)
 SEED = 123456789
 
 def extract_all_metrics(metrics, metric_names):
@@ -33,7 +33,8 @@ if __name__ == '__main__':
         end_time=float('inf'),
         sampling_rate=SAMPLING_RATE,
         type_simulation="infinite",
-        batch_num=BATCH_NUM
+        batch_num=BATCH_NUM,
+        model_type = "semi_improved",
     )
 
     print("Esecuzione simulazione preliminare...")

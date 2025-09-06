@@ -1,19 +1,18 @@
-from distributions.distributions import exponential
-from libs.rng import *
 from utils.computeBatchMeans import *
 from lambda_scaler import *
 from entity.Pool import *
 from entity.Server import *
 
-
 # -------------------- Airport Simulation --------------------
 class AirportSimulation:
-    def __init__(self, end_time, sampling_rate, type_simulation, batch_num = 0):
+    def __init__(self, end_time, sampling_rate, type_simulation, model_type, batch_num = 0):
         self.end_time = end_time
+        self.metrics = {}
         self.sampling_rate = sampling_rate
         self.batch_num = batch_num
         self.processed_batch = 0
         self.type_simulation = type_simulation
+        self.model_type = model_type
         self.times = Times()
         self.event_list = []
         self.servers = []
@@ -33,21 +32,7 @@ class AirportSimulation:
             (1140*60, 1319*60 +59  , "evening"),
             (1320*60, 1440*60 +59  , "late_evening"),
          ]
-        self.lambdas = {
-            "business": 0.0,
-            "premium_economy": 0.0,
-            "economy": 0.0,
-            "flexi_plus": 0.0,
-            "self_bd": 0.0,
-            "bd": 0.0,
-            "turnstile_area_external": 0.0,
-            "exogenous": 0.0,
-            "fast_track_turnstile": 0.0,
-            "security_area": 0.0,
-            "fast_track_security_area": 0.0,
-            "security_area_fast": 0.0,
-            "fast_track_security_fast": 0.0,
-        }
+        self.lambdas = {}
         self.next_sampling = self.sampling_rate
         self.init_servers_and_pools()
         self.init_time_slot_events()
@@ -56,7 +41,6 @@ class AirportSimulation:
         for pool in self.server_pools.values():
             pool.reset_pool()
         self.completed_jobs = 0
-        #self.metrics = []
         self.event_list.clear()
         self.times.current = 0
         self.times.next = 0.0
@@ -73,49 +57,110 @@ class AirportSimulation:
             if start <= current_time < end:
                 self.current_slot = name
                 lambda_scaler = LambdaScaler()
-                self.lambdas = lambda_scaler.return_new_lambdas(self.current_slot)
+                if self.type_simulation == "finite":
+                    self.lambdas = lambda_scaler.return_new_lambdas(self.current_slot, self.model_type)
+                else : self.lambdas = lambda_scaler.return_new_lambdas("late_afternoon", self.model_type)
                 break
         print(f"  [TIME SLOT] Current time slot: {self.current_slot}")
 
     # -------------------- Servers & Pools --------------------
     def init_servers_and_pools(self):
 
-        self.server_pools = {
-                "business":                 MultiServerSingleQueuePool([ClassicCheckInServer(f"business_{index}") for index in range(1)]),
-                "premium_economy":          MultiServerSingleQueuePool([ClassicCheckInServer(f"premium_economy_{index}") for index in range(1)]),
-                "economy":                  MultiServerSingleQueuePool([ClassicCheckInServer(f"economy_{index}") for index in range(5)]),
-                "flexi_plus":               MultiServerSingleQueuePool([ClassicCheckInServer(f"flexi_plus_{index}") for index in range(1)]),
-                "self_bd":                  MultiServerSingleQueuePool([BagDropCheckInServer(f"self_bd_{index}") for index in range(1)]),
-                "bd":                       MultiServerSingleQueuePool([BagDropCheckInServer(f"bd_{index}") for index in range(5)]),
-                "fast_track_turnstile":     MultiServerSingleQueuePool([TurnstileServer("fast_track_turnstile_0")]),
-                "fast_track_security_area": MultiServerMultiQueuesPool([SecurityCheckServer(f"fast_track_sec_{index}") for index in range(3)]),
-                "fast_track_security_fast": MultiServerMultiQueuesPool([FastSecurityCheckServer(f"fast_track_sec_fast_{index}") for index in range(1)]),
-                "turnstiles":               MultiServerMultiQueuesPool([TurnstileServer(f"turnstile_{index}") for index in range(4)]),
-                "security_area":            MultiServerMultiQueuesPool([SecurityCheckServer(f"security_{index}") for index in range(9)]),
-                "security_area_fast":       MultiServerMultiQueuesPool([FastSecurityCheckServer(f"security_fast_{index}") for index in range(3)]),
-                "tsa_security":             MultiServerMultiQueuesPool([TsaSecurityCheckServer(f"tsa_security_{index}") for index in range(7)]),
-                "tsa_turnstile":            MultiServerMultiQueuesPool([TsaTurnstile(f"tsa_turnstile_{index}") for index in range(2)]),
+        match self.model_type:
+            case "full_improved":
+                self.server_pools = {
+                        "business":                 MultiServerSingleQueuePool([ClassicCheckInServer(f"business_{index}") for index in range(1)]),
+                        "premium_economy":          MultiServerSingleQueuePool([ClassicCheckInServer(f"premium_economy_{index}") for index in range(1)]),
+                        "economy":                  MultiServerSingleQueuePool([ClassicCheckInServer(f"economy_{index}") for index in range(5)]),
+                        "flexi_plus":               MultiServerSingleQueuePool([ClassicCheckInServer(f"flexi_plus_{index}") for index in range(1)]),
+                        "self_bd":                  MultiServerSingleQueuePool([BagDropCheckInServer(f"self_bd_{index}") for index in range(1)]),
+                        "bd":                       MultiServerSingleQueuePool([BagDropCheckInServer(f"bd_{index}") for index in range(5)]),
+                        "fast_track_turnstile":     MultiServerSingleQueuePool([TurnstileServer("fast_track_turnstile_0")]),
+                        "fast_track_security_area": MultiServerMultiQueuesPool([SecurityCheckServer(f"fast_track_sec_{index}") for index in range(3)]),
+                        "fast_track_security_fast": MultiServerMultiQueuesPool([FastSecurityCheckServer(f"fast_track_sec_fast_{index}") for index in range(1)]),
+                        "turnstiles":               MultiServerMultiQueuesPool([TurnstileServer(f"turnstile_{index}") for index in range(4)]),
+                        "security_area":            MultiServerMultiQueuesPool([SecurityCheckServer(f"security_{index}") for index in range(9)]),
+                        "security_area_fast":       MultiServerMultiQueuesPool([FastSecurityCheckServer(f"security_fast_{index}") for index in range(3)]),
+                        "tsa_security":             MultiServerMultiQueuesPool([TsaSecurityCheckServer(f"tsa_security_{index}") for index in range(7)]),
+                        "tsa_turnstile":            MultiServerMultiQueuesPool([TsaTurnstile(f"tsa_turnstile_{index}") for index in range(2)]),
 
-            }
+                }
 
-        self.passenger_routing = {
-            "business":                 PassengerType("Business",           self.server_pools["business"],              next_center="fast_track_turnstile"),
-            "premium_economy":          PassengerType("PremiumEconomy",     self.server_pools["premium_economy"],       next_center="turnstile_area"),
-            "economy":                  PassengerType("Economy",            self.server_pools["economy"],               next_center="turnstile_area"),
-            "flexi_plus":               PassengerType("FlexiPlus",          self.server_pools["flexi_plus"],            next_center="fast_track_turnstile"),
-            "self_bd":                  PassengerType("SelfBD",             self.server_pools["self_bd"],               next_center="turnstile_area"),
-            "bd":                       PassengerType("BD",                 self.server_pools["bd"],                    next_center="turnstile_area"),
-            "fast_track_turnstile":     PassengerType("FastTrackTurnstile", self.server_pools["fast_track_turnstile"],  next_center="fast_track_security_area"),
-            "fast_track_security_area": PassengerType("FastTrackSecurity",  self.server_pools["fast_track_security_area"]),
-            "fast_track_security_fast": PassengerType("FastTrackSecurity",  self.server_pools["fast_track_security_fast"]),
-            "turnstile":                PassengerType("Turnstile",          self.server_pools["turnstiles"],            next_center="security_area"),
-            "security_area":            PassengerType("Security",           self.server_pools["security_area"]),
-            "security_area_fast":       PassengerType("Security",           self.server_pools["security_area_fast"]),
-            "tsa_security":             PassengerType("Security",           self.server_pools["tsa_security"]),
-            "tsa_turnstile":            PassengerType("Turnstile",          self.server_pools["tsa_turnstile"],         next_center="tsa_security"),
-        }
+                self.passenger_routing = {
+                    "business": PassengerType("Business", self.server_pools["business"], next_center="fast_track_turnstile"),
+                    "premium_economy": PassengerType("PremiumEconomy", self.server_pools["premium_economy"], next_center="turnstile_area"),
+                    "economy": PassengerType("Economy", self.server_pools["economy"], next_center="turnstile_area"),
+                    "flexi_plus": PassengerType("FlexiPlus", self.server_pools["flexi_plus"], next_center="fast_track_turnstile"),
+                    "self_bd": PassengerType("SelfBD", self.server_pools["self_bd"], next_center="turnstile_area"),
+                    "bd": PassengerType("BD", self.server_pools["bd"], next_center="turnstile_area"),
+                    "fast_track_turnstile": PassengerType("FastTrackTurnstile", self.server_pools["fast_track_turnstile"], next_center="fast_track_security_area"),
+                    "fast_track_security_area": PassengerType("FastTrackSecurity", self.server_pools["fast_track_security_area"]),
+                    "fast_track_security_fast": PassengerType("FastTrackSecurity", self.server_pools["fast_track_security_fast"]),
+                    "turnstile": PassengerType("Turnstile", self.server_pools["turnstiles"], next_center="security_area"),
+                    "security_area": PassengerType("Security", self.server_pools["security_area"]),
+                    "security_area_fast": PassengerType("Security", self.server_pools["security_area_fast"]),
+                    "tsa_security": PassengerType("Security", self.server_pools["tsa_security"]),
+                    "tsa_turnstile": PassengerType("Turnstile", self.server_pools["tsa_turnstile"], next_center="tsa_security"),
+                }
 
-        self.metrics = {}
+            case "semi_improved":
+                self.server_pools = {
+                    "business": MultiServerSingleQueuePool([ClassicCheckInServer(f"business_{index}") for index in range(1)]),
+                    "premium_economy": MultiServerSingleQueuePool([ClassicCheckInServer(f"premium_economy_{index}") for index in range(1)]),
+                    "economy": MultiServerSingleQueuePool([ClassicCheckInServer(f"economy_{index}") for index in range(5)]),
+                    "flexi_plus": MultiServerSingleQueuePool([ClassicCheckInServer(f"flexi_plus_{index}") for index in range(1)]),
+                    "self_bd": MultiServerSingleQueuePool([BagDropCheckInServer(f"self_bd_{index}") for index in range(1)]),
+                    "bd": MultiServerSingleQueuePool([BagDropCheckInServer(f"bd_{index}") for index in range(5)]),
+                    "fast_track_turnstile": MultiServerSingleQueuePool([TurnstileServer("fast_track_turnstile_0")]),
+                    "fast_track_security_area": MultiServerMultiQueuesPool([SecurityCheckServer(f"fast_track_sec_{index}") for index in range(4)]),
+                    "turnstiles": MultiServerMultiQueuesPool([TurnstileServer(f"turnstile_{index}") for index in range(4)]),
+                    "security_area": MultiServerMultiQueuesPool([SecurityCheckServer(f"security_{index}") for index in range(12)]),
+                    "tsa_security": MultiServerMultiQueuesPool([TsaSecurityCheckServer(f"tsa_security_{index}") for index in range(7)]),
+                    "tsa_turnstile": MultiServerMultiQueuesPool([TsaTurnstile(f"tsa_turnstile_{index}") for index in range(2)]),
+
+                }
+
+                self.passenger_routing = {
+                    "business": PassengerType("Business", self.server_pools["business"], next_center="fast_track_turnstile"),
+                    "premium_economy": PassengerType("PremiumEconomy", self.server_pools["premium_economy"], next_center="turnstile_area"),
+                    "economy": PassengerType("Economy", self.server_pools["economy"], next_center="turnstile_area"),
+                    "flexi_plus": PassengerType("FlexiPlus", self.server_pools["flexi_plus"],  next_center="fast_track_turnstile"),
+                    "self_bd": PassengerType("SelfBD", self.server_pools["self_bd"], next_center="turnstile_area"),
+                    "bd": PassengerType("BD", self.server_pools["bd"], next_center="turnstile_area"),
+                    "fast_track_turnstile": PassengerType("FastTrackTurnstile", self.server_pools["fast_track_turnstile"], next_center="fast_track_security_area"),
+                    "fast_track_security_area": PassengerType("FastTrackSecurity", self.server_pools["fast_track_security_area"]),
+                    "turnstile": PassengerType("Turnstile", self.server_pools["turnstiles"], next_center="security_area"),
+                    "security_area": PassengerType("Security", self.server_pools["security_area"]),
+                    "tsa_security": PassengerType("Security", self.server_pools["tsa_security"]),
+                    "tsa_turnstile": PassengerType("Turnstile", self.server_pools["tsa_turnstile"], next_center="tsa_security"),
+                }
+            case _:
+                self.server_pools = {
+                    "business": MultiServerSingleQueuePool([ClassicCheckInServer(f"business_{index}") for index in range(1)]),
+                    "premium_economy": MultiServerSingleQueuePool([ClassicCheckInServer(f"premium_economy_{index}") for index in range(1)]),
+                    "economy": MultiServerSingleQueuePool([ClassicCheckInServer(f"economy_{index}") for index in range(5)]),
+                    "flexi_plus": MultiServerSingleQueuePool([ClassicCheckInServer(f"flexi_plus_{index}") for index in range(1)]),
+                    "self_bd": MultiServerSingleQueuePool([BagDropCheckInServer(f"self_bd_{index}") for index in range(1)]),
+                    "bd": MultiServerSingleQueuePool([BagDropCheckInServer(f"bd_{index}") for index in range(5)]),
+                    "fast_track_turnstile": MultiServerSingleQueuePool([TurnstileServer("fast_track_turnstile_0")]),
+                    "fast_track_security_area": MultiServerSingleQueuePool([SecurityCheckServer(f"fast_track_sec_{index}") for index in range(2)]),
+                    "turnstiles": MultiServerSingleQueuePool([TurnstileServer(f"turnstile_{index}") for index in range(4)]),
+                    "security_area": MultiServerSingleQueuePool([SecurityCheckServer(f"security_{index}") for index in range(7)])
+                }
+
+                self.passenger_routing = {
+                    "business": PassengerType("Business", self.server_pools["business"], next_center="fast_track_turnstile"),
+                    "premium_economy": PassengerType("PremiumEconomy", self.server_pools["premium_economy"], next_center="turnstile_area"),
+                    "economy": PassengerType("Economy", self.server_pools["economy"], next_center="turnstile_area"),
+                    "flexi_plus": PassengerType("FlexiPlus", self.server_pools["flexi_plus"], next_center="fast_track_turnstile"),
+                    "self_bd": PassengerType("SelfBD", self.server_pools["self_bd"], next_center="turnstile_area"),
+                    "bd": PassengerType("BD", self.server_pools["bd"], next_center="turnstile_area"),
+                    "fast_track_turnstile": PassengerType("FastTrackTurnstile", self.server_pools["fast_track_turnstile"], next_center="fast_track_security_area"),
+                    "fast_track_security_area": PassengerType("FastTrackSecurity", self.server_pools["fast_track_security_area"]),
+                    "turnstile": PassengerType("Turnstile", self.server_pools["turnstiles"], next_center="security_area"),
+                    "security_area": PassengerType("Security", self.server_pools["security_area"])
+                }
+
         for pool_name, pool in self.server_pools.items():
             if isinstance(pool, MultiServerSingleQueuePool):
                 # pool con più code → una sola lista di metriche
@@ -156,15 +201,20 @@ class AirportSimulation:
             self.arrivals += 1
 
         if op == "turnstile_area":
-            select_stream(20)
-            r = random()
-            # tre scelte con probabilità 15%, 15%, 70%
-            if r < 0.10:
-                choice = "fast"
-            elif r < 0.45:  # da 0.15 a 0.30 = 15%
-                choice = "tsa"
-            else:  # da 0.30 a 1.00 = 70%
-                choice = "normal"
+            if self.model_type != "no_improved":
+                select_stream(20)
+                r1 = random()
+                # tre scelte con probabilità 15%, 15%, 70%
+                if r1 < 0.10:
+                    choice = "fast"
+                elif r1 < 0.45:  # da 0.15 a 0.30 = 15%
+                    choice = "tsa"
+                else:  # da 0.30 a 1.00 = 70%
+                    choice = "normal"
+            else:
+                select_stream(92)
+                r2 = random()
+                choice = "fast" if r2 < 0.2 else "normal"
 
             if choice == "fast":
                 pool = self.server_pools["fast_track_turnstile"]
@@ -246,19 +296,20 @@ class AirportSimulation:
         select_stream(30)
         op_index = "exogenous"
         interarrival = self.generate_interarrival_time(op_index)
-        event_time = max(self.last_arrival_time.get("exogenous", 0.0) + interarrival, self.times.next + interarrival) #f+ self.get_exogenous_transit()
+        event_time = max(self.last_arrival_time.get("exogenous", 0.0) + interarrival, self.times.next + interarrival)
         self.last_arrival_time["exogenous"] = event_time
         if event_time <= self.end_time:
             arrival_time = event_time
             event = Event(arrival_time, "E", "turnstile_area_exogenous")
 
-            select_stream(77)
-            r = random()
-            delay_or_no = "check" if r < 0.5 else "no_check"
-            if delay_or_no == "check":
-                event.check_in_done = True
-            else:
-                event.check_in_done = False
+            if self.model_type == "full_improved":
+                select_stream(77)
+                r = random()
+                delay_or_no = "check" if r < 0.5 else "no_check"
+                if delay_or_no == "check":
+                    event.check_in_done = True
+                else:
+                    event.check_in_done = False
             event.exogenous = True
             heapq.heappush(self.event_list, (arrival_time, "E", event))
             print(f"  [SCHEDULE] Exogenous B+C passenger at t={arrival_time:.2f} (generated at {event_time:.2f})")
@@ -285,7 +336,7 @@ class AirportSimulation:
                 event.exogenous = False
             ptype = self.passenger_routing.get(event.op_index)
             pool = ptype.server_pool if ptype else None
-            server.handle_departure(event, self.event_list, pool=pool, times=self.times)
+            server.handle_departure(event, self.event_list, model_type = self.model_type, pool=pool, times=self.times)
             if ptype and ptype.name == "Security" or ptype.name == "FastTrackSecurity":
                 self.completed_jobs += 1
         elif event_type == "H":
@@ -300,24 +351,13 @@ class AirportSimulation:
 
     # -------------------- Metrics --------------------
     def collect_metrics(self):
-        """
-        Raccoglie snapshot e metriche aggregate per ogni pool.
-        Deve essere chiamato periodicamente (a ogni evento o step).
-        Raccoglie metriche per singolo tornello se il pool è 'turnstiles'.
-        """
         current_time = self.times.next
 
-
         for pool_name, pool in self.server_pools.items():
-
-            # --- Scaling arrivi ---
-
-
             if pool_name in ("turnstiles", "fast_track_turnstile"):
                 lambda_rescaled = self.lambdas["turnstile_area_external"]
             else:
                 lambda_rescaled = self.lambdas[pool_name]
-
 
             # ------------------- Metrics per server (solo tornelli) -------------------
             if isinstance(pool, MultiServerMultiQueuesPool):
@@ -368,7 +408,6 @@ class AirportSimulation:
                     avg_service = service_total / len(pool.servers) if len(pool.servers) > 0 else 0
                     avg_resp = avg_queue + avg_service
 
-
                     # --- Lunghezza coda ---
                     if isinstance(pool, MultiServerMultiQueuesPool):
                         queue_len = sum(len(s.queue) for s in pool.servers)
@@ -400,8 +439,6 @@ class AirportSimulation:
                         f"Avg_queue_population={snapshot['avg_queue_population']:.2f} "
                         f"Avg_system_population={snapshot['avg_system_population']:.2f}"
                     )
-
-
 
     # -------------------- Run --------------------
     def run(self):

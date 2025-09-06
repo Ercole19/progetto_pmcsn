@@ -1,6 +1,9 @@
 from collections import deque
 from abc import ABC, abstractmethod
 
+from libs.rng import select_stream, random
+
+
 class ServerPool(ABC):
     def __init__(self, servers, debug=True):
         self.servers = servers
@@ -78,7 +81,7 @@ class MultiServerMultiQueuesPool(ServerPool):
             s.reset_server()
             s.queue.clear()
 
-    def assign_event(self, event, event_list, times):
+    """def assign_event(self, event, event_list, times):
         # 1. Controlla se c’è un tornello libero
         for s in self.servers:
             if s.state == 0:
@@ -90,6 +93,33 @@ class MultiServerMultiQueuesPool(ServerPool):
 
         # 2. Tutti occupati → scegli quello con la coda più corta
         chosen = min(self.servers, key=lambda s: len(s.queue))
+        event.arrival_time = times.next
+        chosen.queue.append(event)
+        if self.debug:
+            print(f"  [QUEUEING] '{event.op_index}' → {chosen.name} (queue len={len(chosen.queue)})")"""
+
+    def assign_event(self, event, event_list, times):
+        select_stream(88)
+        r = random()
+        # 1. Controlla se c’è almeno un tornello libero
+        free_servers = [s for s in self.servers if s.state == 0]
+        if free_servers:
+            # numero uniforme dallo stream RNG
+            idx = int(r * len(free_servers))  # mappa in [0, len(free_servers)-1]
+            chosen = free_servers[idx]
+
+            event.arrival_time = times.next
+            chosen.start_service(event, event_list, times)
+            chosen.arrivals.append(times.next)
+            chosen.num_in_system += 1
+            return
+
+        # 2. Tutti occupati → scegli uno a caso con lo stream RNG
+        select_stream(73)
+        r2 = random()
+        idx = int(r2 * len(self.servers))
+        chosen = self.servers[idx]
+
         event.arrival_time = times.next
         chosen.queue.append(event)
         if self.debug:

@@ -1,5 +1,6 @@
 import heapq
 from abc import ABC, abstractmethod
+from distributions.distributions import exponential
 from entity.Pool import MultiServerMultiQueuesPool
 from entity.Entity import *
 from utils.utils import truncate_lognormal
@@ -55,7 +56,7 @@ class Server(ABC):
 
         heapq.heappush(event_list, (self.start_time + service_time, "C", self, event))
 
-    def handle_departure(self, event, event_list, pool=None, times=None):
+    def handle_departure(self, event, event_list, model_type, pool=None, times=None):
         completion_time = times.next
 
         # aggiorna busy time prima di liberare il server
@@ -80,7 +81,8 @@ class Server(ABC):
         next_center_name = getattr(event, "next_center", None)
         if next_center_name is not None:
             new_event = Event(completion_time, "A", next_center_name)
-            #new_event.check_in_done = True
+            if model_type == "full_improved":
+                new_event.check_in_done = True
             heapq.heappush(event_list, (new_event.event_time, "A", new_event))
 
     def utilization(self, current_time):
@@ -132,14 +134,17 @@ class SecurityCheckServer(Server):
         super().__init__(name)  # 30 s - 5 min
         self.queue = deque()
     def get_service(self):
-        return truncate_lognormal(4.09, 0.091, 30, 150)
+        #return truncate_lognormal(4.09, 0.091, 30, 150)
+        return exponential(60)
 
 class TsaSecurityCheckServer(Server):
     def __init__(self, name):
         super().__init__(name)  # 30 s - 5 min
         self.queue = deque()
     def get_service(self):
-        return truncate_lognormal(3.7, 0.1, 15, 60)  # Media ≈ 40s
+        #return truncate_lognormal(3.7, 0.1, 15, 60)  # Media ≈ 40s
+        return exponential(40)
+
 
 class FastSecurityCheckServer(Server):
     def __init__(self, name):
@@ -154,16 +159,19 @@ class TsaTurnstile(Server):
         super().__init__(name)  # 30 s - 5 min
         self.queue = deque()
     def get_service(self):
-        return 10
+        #return 10
+        return exponential(10)
 
 
 class TsaSecurity(Server):
     def __init__(self, name):
-        super().__init__(name)  # 30 s - 5 min
+        super().__init__(name)   # 30 s - 5 min
         self.queue = deque()
 
     def get_service(self):
-        return truncate_lognormal(4.09, 0.091, 30, 150)
+        # log-normale con media ~40 e varianza ~10, troncata tra 30 e 150
+        #return truncate_lognormal(3.686, 0.079, 30, 150)
+        return exponential(40)
 
 
 # -------------------- Specialized Servers --------------------

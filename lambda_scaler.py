@@ -55,14 +55,14 @@ class LambdaScaler:
             "late_evening": 0.078
         }
 
-    def return_new_lambdas(self, time_slot):
+    def return_new_lambdas(self, time_slot, model_type):
         num_of_passenger_in_slot = self.total_daily_passengers * (self.percent.get(time_slot)) #Passeggeri che arrivano in quella fascia oraria
         lambda_total_slot = num_of_passenger_in_slot / (self.slots_duration[time_slot]) #Tasso globale in ingresso al sistema in quella fascia oraria
-        self.calculate_lambdas(lambda_total_slot)
+        self.calculate_lambdas(lambda_total_slot, model_type)
         return self.lambdas
 
 
-    def calculate_lambdas(self, lambda_total):
+    def calculate_lambdas(self, lambda_total, model_type):
         GAMMA = lambda_total  # Tasso medio complessivo degli arrivi
 
         LAMBDA_A = GAMMA * 0.6  # Tasso medio complessivo degli arrivi alla zona Check-In A
@@ -113,7 +113,27 @@ class LambdaScaler:
         LAMBDA_7_CHECK_IN = LAMBDA_4_CHECK_IN * self.P_N
         LAMBDA_7_NO_CHECK_IN = LAMBDA_BM_TOT * self.P_N
 
-        self.lambdas = {"business": LAMBDA_BC,
+        match model_type:
+            case "full_improved":
+                self.lambdas = {"business": LAMBDA_BC,
+                                "premium_economy": LAMBDA_PE,
+                                "economy": LAMBDA_ECO,
+                                "flexi_plus": LAMBDA_FP,
+                                "self_bd": LAMBDA_SBD,
+                                "bd": LAMBDA_BD,
+                                "turnstile_area_external": LAMBDA_BM_TOT,
+                                "exogenous": LAMBDA_E,
+                                "fast_track_turnstile": LAMBDA_6,
+                                "security_area": LAMBDA_7_NO_CHECK_IN,
+                                "security_area_fast": LAMBDA_7_CHECK_IN,
+                                "fast_track_security_area": LAMBDA_6_NO_CHECK_IN,
+                                "fast_track_security_fast": LAMBDA_6_CHECK_IN,
+                                "tsa_security":   LAMBDA_8,
+                                "tsa_turnstile": LAMBDA_8,
+                                }
+            case "semi_improved":
+                self.lambdas = {
+                        "business": LAMBDA_BC,
                         "premium_economy": LAMBDA_PE,
                         "economy": LAMBDA_ECO,
                         "flexi_plus": LAMBDA_FP,
@@ -123,12 +143,23 @@ class LambdaScaler:
                         "exogenous": LAMBDA_E,
                         "fast_track_turnstile": LAMBDA_6,
                         "security_area": LAMBDA_7,
-                        #"security_area_fast": LAMBDA_7_CHECK_IN,
                         "fast_track_security_area": LAMBDA_6,
-                        #"fast_track_security_fast": LAMBDA_6_CHECK_IN,
-                        "tsa_security":   LAMBDA_8,
+                        "tsa_security": LAMBDA_8,
                         "tsa_turnstile": LAMBDA_8,
                         }
-
+            case _:
+                self.lambdas = {
+                    "business": LAMBDA_BC,
+                    "premium_economy": LAMBDA_PE,
+                    "economy": LAMBDA_ECO,
+                    "flexi_plus": LAMBDA_FP,
+                    "self_bd": LAMBDA_SBD,
+                    "bd": LAMBDA_BD,
+                    "turnstile_area_external": LAMBDA_BM_TOT,
+                    "exogenous": LAMBDA_E,
+                    "fast_track_turnstile": LAMBDA_6,
+                    "security_area": LAMBDA_7,
+                    "fast_track_security_area": LAMBDA_6,
+                }
 
 

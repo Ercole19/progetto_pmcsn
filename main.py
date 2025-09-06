@@ -1,22 +1,23 @@
 import os
+
 from libs.rng import *
 import pandas as pd
 import numpy as np
-from half_improved_simulation import AirportSimulation
+from final_simulation import AirportSimulation
 import matplotlib.pyplot as plt
 
 # Parametri della simulazione
-SEED = 123456789 #987654321 #123456789 #1359796324 # 1161688905
 seed_used = []  # Lista dei seed utilizzati per ogni replica della simulazione (Per ripetibilità)
+MODEL_TYPE = "full_improved" # Altre scelte: "semi_improved", per miglioramento medio e "no_improved" per il modello originale senza miglioramento
 
 # ---------------- INFINITE HORIZON SIMULATION ----------------
-INFINITE_HORIZON = False
-BATCH_DIM =  16384                           # Campionamento ogni 16384 job (b)
+INFINITE_HORIZON = True
+BATCH_DIM =  16384                          # Campionamento ogni 16384 job (b)
 BATCH_NUM =  25                              # Numero di campionamenti da eseguire (k)
 INFINITE_HORIZON_TIME = BATCH_DIM * BATCH_NUM       # Lunghezza del campione
 
 # ---------------- FINITE HORIZON SIMULATION ----------------
-FINITE_HORIZON =        True
+FINITE_HORIZON =        False
 FINITE_HORIZON_TIME =  3600.0 * 24     # una giornata completa all'aeroporto --> 00:00 - 23:59
 REPLICATION_NUM =      28           # numero di repliche eseguite
 SAMPLING_RATE =        60           # Tempo di campionamento per le statistiche
@@ -25,7 +26,9 @@ SAMPLING_RATE =        60           # Tempo di campionamento per le statistiche
 def finite_horizon_run():
     total_percentiles_waits = []
     all_seeds_metrics = {}  # per memorizzare df di ogni seed
-    current_seed = SEED
+    if MODEL_TYPE == "full_improved" or MODEL_TYPE == "no_improved":
+        current_seed = 123456789
+    else: current_seed = 987654321
     seed_used.append(current_seed)
 
     for idx in range(REPLICATION_NUM):
@@ -35,9 +38,9 @@ def finite_horizon_run():
         sim = AirportSimulation(
             end_time=FINITE_HORIZON_TIME,
             sampling_rate=SAMPLING_RATE,
-            type_simulation="finite"
+            type_simulation="finite",
+            model_type = MODEL_TYPE,
         )
-
         replica_metrics = sim.run()
         total_percentiles_waits.append(replica_metrics["daily_percentile_90_wait"])
 
@@ -76,7 +79,9 @@ def finite_horizon_run():
             else:
                 continue
 
-        print(f"\n  Totale passeggeri completati: {replica_metrics["security_area"]["security_0"][-1]["passengers_completed"]}")
+        if MODEL_TYPE != "no_improved":
+            print(f"\n  Totale passeggeri completati: {replica_metrics["security_area"]["security_0"][-1]["passengers_completed"]}")
+        else : print(f"\n  Totale passeggeri completati: {replica_metrics["security_area"][-1]["passengers_completed"]}")
         print(f"  Totale passeggeri ancora in sistema: {total_in_system}")
         print("-" * 50)
 
@@ -97,33 +102,6 @@ def finite_horizon_run():
         df = pd.DataFrame(all_data)
         df = df.sort_values(["pool_name", "time"])
         all_seeds_metrics[current_seed] = df
-
-        # -------------------- Grafici per ogni pool --------------------
-        out_dir = f"finite_seed_{current_seed}"
-        """os.makedirs(out_dir, exist_ok=True)
-
-        pool_names = df["pool_name"].unique()
-        for pool in pool_names:
-            df_pool = df[df["pool_name"] == pool]
-            x = df_pool["time"]
-
-            plt.figure(figsize=(12,6))
-            for metric, color in zip(
-                ["avg_utilization","avg_waiting_time","avg_response_time","avg_queue_population"],
-                ["blue","orange","green","purple"]
-            ):
-                plt.plot(x, df_pool[metric], label=metric, color=color)
-            plt.xlabel("Tempo")
-            plt.ylabel("Valore")
-            plt.title(f"Pool: {pool} - Seed {current_seed}")
-            plt.legend()
-            plt.grid(True)
-            plt.savefig(os.path.join(out_dir, f"{pool}_metrics.png"))
-            plt.close()
-
-        # Aggiorna seed per la prossima replica
-        """
-
         current_seed = get_seed()
         seed_used.append(current_seed)
 
@@ -154,7 +132,7 @@ def finite_horizon_run():
             plt.legend()
             plt.grid(True)
 
-            global_dir = "global_metrics_half"
+            global_dir = "global_metrics_" + MODEL_TYPE
             os.makedirs(global_dir, exist_ok=True)
             plt.savefig(os.path.join(global_dir, f"{pool}_{metric}.png"))
             plt.close()
@@ -164,7 +142,7 @@ def finite_horizon_run():
 
 def infinite_horizon_run():
     # Inizializza il seed
-    current_seed = SEED
+    current_seed = 754321986
     seed_used.append(current_seed)
     plant_seeds(current_seed)
 
@@ -243,7 +221,8 @@ def infinite_horizon_run():
         end_time=float('inf'),
         sampling_rate=BATCH_DIM,
         type_simulation="infinite",
-        batch_num=BATCH_NUM
+        batch_num=BATCH_NUM,
+        model_type = MODEL_TYPE,
     )
     metrics = sim.run()
 
